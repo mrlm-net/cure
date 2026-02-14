@@ -18,9 +18,9 @@ type mockCommand struct {
 	called bool
 }
 
-func (m *mockCommand) Name() string        { return m.name }
-func (m *mockCommand) Description() string { return m.desc }
-func (m *mockCommand) Usage() string       { return m.usage }
+func (m *mockCommand) Name() string         { return m.name }
+func (m *mockCommand) Description() string  { return m.desc }
+func (m *mockCommand) Usage() string        { return m.usage }
 func (m *mockCommand) Flags() *flag.FlagSet { return m.flags }
 
 func (m *mockCommand) Run(_ context.Context, _ *Context) error {
@@ -113,19 +113,14 @@ func TestSerialRunner_ContextCancellation(t *testing.T) {
 	}
 }
 
-func TestConcurrentRunner_NotImplemented(t *testing.T) {
-	runner := &ConcurrentRunner{}
-	err := runner.Execute(context.Background(), nil, nil)
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("error = %v, want ErrNotImplemented", err)
+func TestErrNotImplemented_StillExists(t *testing.T) {
+	// Verify the deprecated ErrNotImplemented sentinel still exists
+	// for backward compatibility.
+	if ErrNotImplemented == nil {
+		t.Error("ErrNotImplemented should not be nil")
 	}
-}
-
-func TestPipelineRunner_NotImplemented(t *testing.T) {
-	runner := &PipelineRunner{}
-	err := runner.Execute(context.Background(), nil, nil)
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("error = %v, want ErrNotImplemented", err)
+	if ErrNotImplemented.Error() != "terminal: runner not implemented" {
+		t.Errorf("ErrNotImplemented = %q, want %q", ErrNotImplemented.Error(), "terminal: runner not implemented")
 	}
 }
 

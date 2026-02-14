@@ -3,6 +3,7 @@ package terminal
 import (
 	"flag"
 	"io"
+	"log/slog"
 )
 
 // Context provides the execution environment for a command, including parsed
@@ -22,6 +23,12 @@ type Context struct {
 	// May be nil if the command declared no flags.
 	Flags *flag.FlagSet
 
+	// Stdin is the standard input stream for the command.
+	// Only populated by [PipelineRunner] for piped input. May be nil
+	// for all other runners. Commands that support pipeline input
+	// should check for nil before reading.
+	Stdin io.Reader
+
 	// Stdout is the standard output stream for the command.
 	// Commands must write normal output here, not to os.Stdout.
 	Stdout io.Writer
@@ -29,4 +36,9 @@ type Context struct {
 	// Stderr is the standard error stream for the command.
 	// Commands must write error and diagnostic messages here, not to os.Stderr.
 	Stderr io.Writer
+
+	// Logger is the structured logger for this command execution.
+	// May be nil if no logger was configured on the Router.
+	// Commands should check for nil before logging.
+	Logger *slog.Logger
 }

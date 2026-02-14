@@ -9,9 +9,9 @@ import (
 
 func TestContext(t *testing.T) {
 	tests := []struct {
-		name   string
-		ctx    Context
-		check  func(t *testing.T, c *Context)
+		name  string
+		ctx   Context
+		check func(t *testing.T, c *Context)
 	}{
 		{
 			name: "all fields populated",

@@ -141,13 +141,17 @@ func TestNode_CollectCommands(t *testing.T) {
 	}
 }
 
-func TestNode_FindSimilar_Stub(t *testing.T) {
+func TestNode_FindSimilar_Basic(t *testing.T) {
 	root := &node{children: make(map[byte]*node)}
 	root.insert("help", &mockCommand{name: "help"})
 
 	got := root.findSimilar("hel", 5)
-	if got != nil {
-		t.Errorf("findSimilar() = %v, want nil (not implemented)", got)
+	if len(got) != 1 || got[0].Name() != "help" {
+		names := make([]string, len(got))
+		for i, c := range got {
+			names[i] = c.Name()
+		}
+		t.Errorf("findSimilar(hel) = %v, want [help]", names)
 	}
 }
 

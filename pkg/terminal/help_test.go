@@ -261,29 +261,29 @@ func TestHelpCommand_Integration(t *testing.T) {
 	router.Register(&mockCommand{name: "version", desc: "Print version"})
 	router.Register(NewHelpCommand(router))
 
-	// Test via Router.Run — "help" lists commands
+	// Test via Router.RunArgs — "help" lists commands
 	var buf bytes.Buffer
 	router.stdout = &buf
-	err := router.Run([]string{"help"})
+	err := router.RunArgs([]string{"help"})
 	if err != nil {
-		t.Fatalf("Run(help) error = %v", err)
+		t.Fatalf("RunArgs(help) error = %v", err)
 	}
 	if !strings.Contains(buf.String(), "version") {
 		t.Error("help output missing 'version' command")
 	}
 
-	// Test via Router.Run — "help version" shows detail
+	// Test via Router.RunArgs — "help version" shows detail
 	buf.Reset()
-	err = router.Run([]string{"help", "version"})
+	err = router.RunArgs([]string{"help", "version"})
 	if err != nil {
-		t.Fatalf("Run(help version) error = %v", err)
+		t.Fatalf("RunArgs(help version) error = %v", err)
 	}
-	if !strings.Contains(buf.String(), "version — Print version") {
+	if !strings.Contains(buf.String(), "version \u2014 Print version") {
 		t.Error("help version output missing header")
 	}
 
 	// Test unknown — "help nonexistent" returns error
-	err = router.Run([]string{"help", "nonexistent"})
+	err = router.RunArgs([]string{"help", "nonexistent"})
 	if err == nil {
 		t.Fatal("expected error for unknown command")
 	}
@@ -295,8 +295,8 @@ func TestRouter_Lookup(t *testing.T) {
 	router.Register(&mockCommand{name: "help", desc: "Show help"})
 
 	tests := []struct {
-		name   string
-		want   bool
+		name string
+		want bool
 	}{
 		{"version", true},
 		{"help", true},
@@ -319,6 +319,53 @@ func TestRouter_Lookup(t *testing.T) {
 
 // Verify Router implements CommandRegistry.
 var _ CommandRegistry = (*Router)(nil)
+
+func TestHelpCommand_SubRouterHelp(t *testing.T) {
+	config := New(
+		WithName("config"),
+		WithDescription("Manage configuration"),
+		WithStdout(io.Discard),
+		WithStderr(io.Discard),
+	)
+	config.Register(&mockCommand{name: "set", desc: "Set a value", usage: "Usage: config set <key> <value>"})
+	config.Register(&mockCommand{name: "get", desc: "Get a value"})
+
+	root := New(WithStdout(io.Discard), WithStderr(io.Discard))
+	root.Register(config)
+	root.Register(&mockCommand{name: "version", desc: "Show version"})
+
+	helpCmd := NewHelpCommand(root)
+
+	// "help config" should show sub-router description and usage
+	var buf bytes.Buffer
+	tc := &Context{Args: []string{"config"}, Stdout: &buf, Stderr: io.Discard}
+	err := helpCmd.Run(context.Background(), tc)
+	if err != nil {
+		t.Fatalf("Run(help config) error = %v", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "config") {
+		t.Error("help config output missing 'config'")
+	}
+	if !strings.Contains(output, "Manage configuration") {
+		t.Error("help config output missing description")
+	}
+
+	// "help config set" should delegate to sub-router's help
+	buf.Reset()
+	tc = &Context{Args: []string{"config", "set"}, Stdout: &buf, Stderr: io.Discard}
+	err = helpCmd.Run(context.Background(), tc)
+	if err != nil {
+		t.Fatalf("Run(help config set) error = %v", err)
+	}
+	output = buf.String()
+	if !strings.Contains(output, "set") {
+		t.Error("help config set output missing 'set'")
+	}
+	if !strings.Contains(output, "Set a value") {
+		t.Error("help config set output missing description")
+	}
+}
 
 func BenchmarkHelpCommand_List(b *testing.B) {
 	cmds := make([]Command, 20)

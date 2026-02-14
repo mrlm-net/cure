@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // CommandRegistry provides read access to registered commands.
@@ -82,7 +83,13 @@ func (c *HelpCommand) listCommands(tc *Context) error {
 	fmt.Fprintln(tc.Stdout, "Available commands:")
 	fmt.Fprintln(tc.Stdout)
 	for _, cmd := range cmds {
-		fmt.Fprintf(tc.Stdout, "  %-*s  %s\n", maxLen, cmd.Name(), cmd.Description())
+		line := fmt.Sprintf("  %-*s  %s", maxLen, cmd.Name(), cmd.Description())
+		if ar, ok := c.registry.(AliasRegistry); ok {
+			if aliases := ar.AliasesFor(cmd.Name()); len(aliases) > 0 {
+				line += fmt.Sprintf(" (aliases: %s)", strings.Join(aliases, ", "))
+			}
+		}
+		fmt.Fprintln(tc.Stdout, line)
 	}
 	fmt.Fprintln(tc.Stdout)
 	fmt.Fprintln(tc.Stdout, "Use \"help <command>\" for more information about a command.")
@@ -93,10 +100,28 @@ func (c *HelpCommand) listCommands(tc *Context) error {
 func (c *HelpCommand) showCommand(tc *Context, name string) error {
 	cmd, found := c.registry.Lookup(name)
 	if !found {
-		return fmt.Errorf("unknown command: %s", name)
+		return &CommandNotFoundError{Name: name}
 	}
 
-	fmt.Fprintf(tc.Stdout, "%s — %s\n", cmd.Name(), cmd.Description())
+	// If looking up a sub-router and there are more args, delegate to its help
+	if subRouter, ok := cmd.(*Router); ok && len(tc.Args) > 1 {
+		subHelp := NewHelpCommand(subRouter)
+		subCtx := &Context{
+			Args:   tc.Args[1:],
+			Stdout: tc.Stdout,
+			Stderr: tc.Stderr,
+			Logger: tc.Logger,
+		}
+		return subHelp.Run(context.Background(), subCtx)
+	}
+
+	fmt.Fprintf(tc.Stdout, "%s \u2014 %s\n", cmd.Name(), cmd.Description())
+
+	if ar, ok := c.registry.(AliasRegistry); ok {
+		if aliases := ar.AliasesFor(cmd.Name()); len(aliases) > 0 {
+			fmt.Fprintf(tc.Stdout, "Aliases: %s\n", strings.Join(aliases, ", "))
+		}
+	}
 
 	if usage := cmd.Usage(); usage != "" {
 		fmt.Fprintln(tc.Stdout)
