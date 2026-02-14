@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-14
+
+### Added
+
+- `pkg/terminal`: command aliases via `AliasProvider` interface and `RegisterWithAliases`
+- `pkg/terminal`: subcommand support — Router implements Command interface for nested routing
+- `pkg/terminal`: advanced error handling — `CommandError`, `CommandNotFoundError`, `NoCommandError`, `FlagParseError` with "did you mean?" suggestions
+- `pkg/terminal`: structured logging via `WithLogger` option using `log/slog`
+- `pkg/terminal`: signal handling (SIGINT/SIGTERM) with grace period via `WithSignalHandler`, `WithTimeout`, `WithGracePeriod`
+- `pkg/terminal`: `ConcurrentRunner` for parallel command execution
+- `pkg/terminal`: `PipelineRunner` for sequential pipeline execution
+
+### Fixed
+
+- `pkg/terminal`: code review findings from v0.2.0 review
+
 ## [0.1.0] - 2026-02-14
 
 ### Added
@@ -23,5 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cmd/cure/main.go` — thin entry point wiring the terminal router
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
-[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mrlm-net/cure/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mrlm-net/cure/releases/tag/v0.1.0
