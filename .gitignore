@@ -33,3 +33,7 @@ bin/
 # Editor/IDE
 # .idea/
 # .vscode/
+
+.claude/*.md
+.claude/*.txt
+.claude/*.json

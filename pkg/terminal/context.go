@@ -4,6 +4,8 @@ import (
 	"flag"
 	"io"
 	"log/slog"
+
+	"github.com/mrlm-net/cure/pkg/config"
 )
 
 // Context provides the execution environment for a command, including parsed
@@ -41,4 +43,9 @@ type Context struct {
 	// May be nil if no logger was configured on the Router.
 	// Commands should check for nil before logging.
 	Logger *slog.Logger
+
+	// Config provides access to the merged configuration.
+	// May be nil if no config was set via WithConfig.
+	// Commands should check for nil before accessing.
+	Config *config.Config
 }
