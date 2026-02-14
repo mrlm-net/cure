@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-14
+
+### Added
+
+- `pkg/config` — hierarchical configuration management with `DeepMerge`, dot-notation `Get`/`Set`, `Environment` loader, `JSONFile` loader with tilde expansion
+- `pkg/terminal`: config integration — `Config` field on `Router` and `Context`, `WithConfig` option, config precedence chain (defaults < global < local < env < flags)
+- `pkg/tracer` — network tracing for HTTP (via `net/http/httptrace`), TCP, and UDP protocols with `Event`/`Emitter` architecture
+- `pkg/tracer`: NDJSON and HTML output formatters
+- `pkg/tracer`: header redaction for Authorization, Cookie, Set-Cookie
+- `pkg/tracer`: dry-run mode for synthetic events without network I/O
+- `cmd/cure`: `trace http|tcp|udp` subcommand with full flag support
+
 ## [0.2.0] - 2026-02-14
 
 ### Added
@@ -39,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cmd/cure/main.go` — thin entry point wiring the terminal router
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
-[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mrlm-net/cure/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mrlm-net/cure/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mrlm-net/cure/releases/tag/v0.1.0
