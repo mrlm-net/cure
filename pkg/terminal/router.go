@@ -134,6 +134,12 @@ func (r *Router) RunContext(ctx context.Context, args []string) error {
 	return r.runner.Execute(ctx, []Command{cmd}, execCtx)
 }
 
+// Lookup finds a registered command by exact name match.
+// Returns the command and true if found, nil and false otherwise.
+func (r *Router) Lookup(name string) (Command, bool) {
+	return r.root.search(name)
+}
+
 // Commands returns all registered commands in no guaranteed order.
 // Use this to build help text or command listings.
 func (r *Router) Commands() []Command {
