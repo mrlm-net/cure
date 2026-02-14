@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/mrlm-net/cure/internal/commands"
+	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
 func main() {
@@ -13,30 +16,8 @@ func main() {
 }
 
 func run(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("no command specified, use 'help' for usage")
-	}
-
-	switch args[0] {
-	case "version":
-		fmt.Println("cure version dev")
-		return nil
-	case "help":
-		printUsage()
-		return nil
-	default:
-		return fmt.Errorf("unknown command %q, use 'help' for usage", args[0])
-	}
-}
-
-func printUsage() {
-	fmt.Print(`cure - development task automation tool
-
-Usage:
-  cure <command> [arguments]
-
-Commands:
-  version    Print version information
-  help       Show this help message
-`)
+	router := terminal.New()
+	router.Register(&commands.VersionCommand{})
+	router.Register(terminal.NewHelpCommand(router))
+	return router.Run(args)
 }
