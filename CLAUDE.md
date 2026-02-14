@@ -12,13 +12,14 @@ A Go CLI tool for automating development tasks — generating templates for AI a
 ## Architecture
 
 ```
-cmd/cure/          Entry point — thin main, wires internal packages
-internal/          Private application logic (not importable by other projects)
-pkg/               Public reusable libraries (importable by anyone)
-  pkg/cli/         Command parsing, flag handling, terminal abstractions
-  pkg/trace/       HTTP tracing utilities
-  pkg/template/    Template generation engine
-  ...              Each package follows single responsibility principle
+cmd/cure/              Entry point — thin main, wires internal packages
+internal/              Private application logic (not importable by other projects)
+  internal/commands/   CLI command implementations (VersionCommand, etc.)
+pkg/                   Public reusable libraries (importable by anyone)
+  pkg/terminal/        Command routing, flag handling, help generation, execution modes
+  pkg/trace/           HTTP tracing utilities
+  pkg/template/        Template generation engine
+  ...                  Each package follows single responsibility principle
 ```
 
 **Design principles**:
