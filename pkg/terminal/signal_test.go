@@ -107,11 +107,13 @@ func BenchmarkRunContext_WithTimeout(b *testing.B) {
 
 func BenchmarkSignalSetup(b *testing.B) {
 	r := &Router{gracePeriod: 5 * time.Second}
-	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, cancel := r.setupSignalHandler(ctx)
-		cancel()
+		// Use a fresh context per iteration so cleanup works cleanly.
+		ctx, baseCancel := context.WithCancel(context.Background())
+		_, cleanup := r.setupSignalHandler(ctx)
+		cleanup()
+		baseCancel()
 	}
 }

@@ -57,9 +57,15 @@ func (r *Router) setupSignalHandler(ctx context.Context) (context.Context, conte
 	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		select {
-		case <-sigCh:
+		case sig := <-sigCh:
+			if sig == nil {
+				// Channel closed during cleanup.
+				return
+			}
 			// First signal: cancel context (grace period starts)
 			if r.logger != nil {
 				r.logger.InfoContext(ctx, "received signal, shutting down gracefully")
@@ -68,7 +74,10 @@ func (r *Router) setupSignalHandler(ctx context.Context) (context.Context, conte
 
 			// Wait for second signal or grace period
 			select {
-			case <-sigCh:
+			case sig := <-sigCh:
+				if sig == nil {
+					return
+				}
 				// Second signal: force exit
 				os.Exit(1)
 			case <-time.After(r.gracePeriod):
@@ -82,8 +91,9 @@ func (r *Router) setupSignalHandler(ctx context.Context) (context.Context, conte
 
 	cleanup := func() {
 		signal.Stop(sigCh)
-		close(sigCh)
 		cancel()
+		close(sigCh)
+		<-done // Wait for goroutine to exit
 	}
 	return ctx, cleanup
 }

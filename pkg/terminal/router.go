@@ -146,19 +146,14 @@ func (r *Router) Usage() string {
 func (r *Router) Flags() *flag.FlagSet { return nil }
 
 // Run dispatches to child commands when the Router is used as a Command
-// in a parent Router. For the root router, this is equivalent to
-// RunContext with context.Background().
+// in a parent Router. It creates a child router context that inherits the
+// parent's output streams without mutating the Router's fields, making it
+// safe for concurrent use.
 func (r *Router) Run(ctx context.Context, tc *Context) error {
 	if tc == nil || len(tc.Args) == 0 {
 		return &NoCommandError{}
 	}
-	// Override sub-router streams with parent context streams
-	// so output goes to the same destination
-	origStdout, origStderr := r.stdout, r.stderr
-	r.stdout, r.stderr = tc.Stdout, tc.Stderr
-	defer func() { r.stdout, r.stderr = origStdout, origStderr }()
-
-	return r.RunContext(ctx, tc.Args)
+	return r.runContextWith(ctx, tc.Args, tc.Stdout, tc.Stderr)
 }
 
 // Register adds a command to the router's radix tree.
@@ -234,6 +229,13 @@ func (r *Router) RunArgs(args []string) error {
 // Returns an error if no args are provided, the command is not found,
 // flag parsing fails, or the command itself returns an error.
 func (r *Router) RunContext(ctx context.Context, args []string) error {
+	return r.runContextWith(ctx, args, r.stdout, r.stderr)
+}
+
+// runContextWith is the shared dispatch implementation that takes explicit
+// output streams. This avoids mutating Router fields when sub-routers
+// inherit streams from a parent context.
+func (r *Router) runContextWith(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return &NoCommandError{}
 	}
@@ -259,8 +261,8 @@ func (r *Router) RunContext(ctx context.Context, args []string) error {
 	}
 
 	execCtx := &Context{
-		Stdout: r.stdout,
-		Stderr: r.stderr,
+		Stdout: stdout,
+		Stderr: stderr,
 		Logger: r.logger,
 	}
 
