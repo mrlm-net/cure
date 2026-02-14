@@ -81,6 +81,7 @@ make build
 - Branch naming: `feat/<issue>-<short-description>`, `fix/<issue>-<short-description>`
 - Commit messages: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`)
 - PRs require passing CI (tests + lint) before merge
+- PRs must request review from **Copilot** (`gh pr edit <number> --add-reviewer copilot`)
 - Squash merge to `main`
 
 ### Versioning
