@@ -70,9 +70,9 @@ func TestRun_VersionOutput(t *testing.T) {
 	router.Register(&commands.VersionCommand{})
 	router.Register(terminal.NewHelpCommand(router))
 
-	err := router.Run([]string{"version"})
+	err := router.RunArgs([]string{"version"})
 	if err != nil {
-		t.Fatalf("router.Run() error = %v", err)
+		t.Fatalf("router.RunArgs() error = %v", err)
 	}
 
 	got := stdout.String()
@@ -89,9 +89,9 @@ func TestRun_HelpOutput(t *testing.T) {
 	router.Register(&commands.VersionCommand{})
 	router.Register(terminal.NewHelpCommand(router))
 
-	err := router.Run([]string{"help"})
+	err := router.RunArgs([]string{"help"})
 	if err != nil {
-		t.Fatalf("router.Run() error = %v", err)
+		t.Fatalf("router.RunArgs() error = %v", err)
 	}
 
 	got := stdout.String()
@@ -108,9 +108,9 @@ func TestRun_HelpVersionOutput(t *testing.T) {
 	router.Register(&commands.VersionCommand{})
 	router.Register(terminal.NewHelpCommand(router))
 
-	err := router.Run([]string{"help", "version"})
+	err := router.RunArgs([]string{"help", "version"})
 	if err != nil {
-		t.Fatalf("router.Run() error = %v", err)
+		t.Fatalf("router.RunArgs() error = %v", err)
 	}
 
 	got := stdout.String()

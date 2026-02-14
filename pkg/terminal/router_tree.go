@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -125,12 +126,54 @@ func (n *node) collectCommands() []Command {
 	return commands
 }
 
-// findSimilar finds commands whose names share a prefix with the given string.
-// Returns up to maxResults matches. Used for "did you mean?" suggestions.
-//
-// NOT IMPLEMENTED in v0.1.0 — returns nil.
-func (n *node) findSimilar(_ string, _ int) []Command {
-	return nil
+// findSimilar finds commands whose names are similar to the given string,
+// using Levenshtein distance. Returns up to maxResults matches, ordered
+// by distance (closest first). Only returns commands within a distance
+// threshold of max(2, len(name)/3).
+func (n *node) findSimilar(name string, maxResults int) []Command {
+	if name == "" || maxResults <= 0 {
+		return nil
+	}
+
+	threshold := len(name) / 3
+	if threshold < 2 {
+		threshold = 2
+	}
+
+	type scored struct {
+		cmd  Command
+		dist int
+	}
+
+	all := n.collectCommands()
+	var matches []scored
+	for _, cmd := range all {
+		d := levenshtein(name, cmd.Name())
+		if d <= threshold {
+			matches = append(matches, scored{cmd: cmd, dist: d})
+		}
+	}
+
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].dist != matches[j].dist {
+			return matches[i].dist < matches[j].dist
+		}
+		return matches[i].cmd.Name() < matches[j].cmd.Name()
+	})
+
+	if len(matches) > maxResults {
+		matches = matches[:maxResults]
+	}
+
+	if len(matches) == 0 {
+		return nil
+	}
+
+	result := make([]Command, len(matches))
+	for i, m := range matches {
+		result[i] = m.cmd
+	}
+	return result
 }
 
 // commonPrefixLen returns the length of the common prefix between two strings.

@@ -46,29 +46,6 @@ func (r *SerialRunner) Execute(ctx context.Context, commands []Command, execCtx 
 	return nil
 }
 
-// ErrNotImplemented is returned by runner stubs that are designed but not
-// yet implemented. See issues #10 (ConcurrentRunner) and #11 (PipelineRunner).
+// Deprecated: ErrNotImplemented was used by runner stubs in v0.1.0.
+// All runners are now fully implemented. This error will be removed in v1.0.0.
 var ErrNotImplemented = errors.New("terminal: runner not implemented")
-
-// ConcurrentRunner executes commands concurrently using goroutines.
-//
-// Not yet implemented — returns [ErrNotImplemented].
-// See issue #10 for implementation tracking.
-type ConcurrentRunner struct{}
-
-// Execute returns [ErrNotImplemented].
-func (r *ConcurrentRunner) Execute(_ context.Context, _ []Command, _ *Context) error {
-	return ErrNotImplemented
-}
-
-// PipelineRunner executes commands in a pipeline, chaining the output
-// of each command to the input of the next.
-//
-// Not yet implemented — returns [ErrNotImplemented].
-// See issue #11 for implementation tracking.
-type PipelineRunner struct{}
-
-// Execute returns [ErrNotImplemented].
-func (r *PipelineRunner) Execute(_ context.Context, _ []Command, _ *Context) error {
-	return ErrNotImplemented
-}

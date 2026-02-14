@@ -19,5 +19,5 @@ func run(args []string) error {
 	router := terminal.New()
 	router.Register(&commands.VersionCommand{})
 	router.Register(terminal.NewHelpCommand(router))
-	return router.Run(args)
+	return router.RunArgs(args)
 }
