@@ -43,6 +43,11 @@ func TestRun(t *testing.T) {
 			wantErr:    true,
 			errContain: "unknown command",
 		},
+		{
+			name:    "trace command help",
+			args:    []string{"help", "trace"},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

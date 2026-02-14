@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/mrlm-net/cure/pkg/config"
 )
 
 // Router dispatches CLI commands using an internal radix tree for fast lookup.
@@ -40,6 +42,7 @@ type Router struct {
 	runner  Runner
 	logger  *slog.Logger
 	aliases map[string][]string // primary name -> []alias names
+	Config  *config.Config       // Configuration object passed to commands
 
 	// Subcommand identity (only set when Router is used as a Command)
 	name string
@@ -98,6 +101,21 @@ func WithName(name string) Option {
 func WithDescription(desc string) Option {
 	return func(r *Router) {
 		r.desc = desc
+	}
+}
+
+// WithConfig sets the configuration for the router.
+// Commands receive this config via Context.Config.
+//
+// Example:
+//
+//	cfg := config.NewConfig(
+//	    config.ConfigObject{"timeout": 30},
+//	)
+//	router := terminal.New(terminal.WithConfig(cfg))
+func WithConfig(cfg *config.Config) Option {
+	return func(r *Router) {
+		r.Config = cfg
 	}
 }
 
@@ -264,6 +282,7 @@ func (r *Router) runContextWith(ctx context.Context, args []string, stdout, stde
 		Stdout: stdout,
 		Stderr: stderr,
 		Logger: r.logger,
+		Config: r.Config,
 	}
 
 	if fs := cmd.Flags(); fs != nil {
