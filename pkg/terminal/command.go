@@ -27,7 +27,7 @@ import (
 //	}
 type Command interface {
 	// Name returns the command name as invoked from the CLI.
-	// Must be a single lowercase word (e.g., "version", "help", "generate").
+	// Should be a short, lowercase command name (e.g., "version", "help", "gen-config").
 	Name() string
 
 	// Description returns a short one-line description shown in help output.
