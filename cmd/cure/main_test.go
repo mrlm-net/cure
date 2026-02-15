@@ -82,7 +82,7 @@ func TestRun_VersionOutput(t *testing.T) {
 	var stdout bytes.Buffer
 
 	router := terminal.New(terminal.WithStdout(&stdout))
-	router.Register(&commands.VersionCommand{})
+	router.Register(commands.NewVersionCommand())
 	router.Register(terminal.NewHelpCommand(router))
 
 	err := router.RunArgs([]string{"version"})
@@ -101,7 +101,7 @@ func TestRun_HelpOutput(t *testing.T) {
 	var stdout bytes.Buffer
 
 	router := terminal.New(terminal.WithStdout(&stdout))
-	router.Register(&commands.VersionCommand{})
+	router.Register(commands.NewVersionCommand())
 	router.Register(terminal.NewHelpCommand(router))
 
 	err := router.RunArgs([]string{"help"})
@@ -120,7 +120,7 @@ func TestRun_HelpVersionOutput(t *testing.T) {
 	var stdout bytes.Buffer
 
 	router := terminal.New(terminal.WithStdout(&stdout))
-	router.Register(&commands.VersionCommand{})
+	router.Register(commands.NewVersionCommand())
 	router.Register(terminal.NewHelpCommand(router))
 
 	err := router.RunArgs([]string{"help", "version"})

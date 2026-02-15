@@ -8,6 +8,11 @@ import (
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
+// NewVersionCommand creates a new version command.
+func NewVersionCommand() terminal.Command {
+	return &VersionCommand{}
+}
+
 // VersionCommand prints the cure version.
 type VersionCommand struct{}
 
