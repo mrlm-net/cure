@@ -48,6 +48,16 @@ func TestRun(t *testing.T) {
 			args:    []string{"help", "trace"},
 			wantErr: false,
 		},
+		{
+			name:    "generate command help",
+			args:    []string{"help", "generate"},
+			wantErr: false,
+		},
+		{
+			name:    "completion command help",
+			args:    []string{"help", "completion"},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
