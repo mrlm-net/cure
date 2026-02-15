@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/mrlm-net/cure/internal/commands"
+	"github.com/mrlm-net/cure/internal/commands/completion"
+	"github.com/mrlm-net/cure/internal/commands/generate"
 	"github.com/mrlm-net/cure/internal/commands/trace"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/terminal"
@@ -26,6 +28,8 @@ func run(args []string) error {
 	router.Register(&commands.VersionCommand{})
 	router.Register(terminal.NewHelpCommand(router))
 	router.Register(trace.NewTraceCommand())
+	router.Register(generate.NewGenerateCommand())
+	router.Register(completion.NewCompletionCommand(router))
 	return router.RunArgs(args)
 }
 
