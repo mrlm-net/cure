@@ -94,14 +94,55 @@ make build
 
 ## Workload Management
 
-Agents track work decisions, blockers, and outcomes in GitHub Issues.
+All work is tracked via GitHub Issues on the [CURE CLI project board](https://github.com/orgs/mrlm-net/projects/9).
 
-**System**: GitHub Issues
+**System**: GitHub Issues + GitHub Projects v2
 **Repository**: mrlm-net/cure
-**Configuration**:
-- Use the `github-issues` skill for issue management
+**Project number**: 9
+**Project ID**: `PVT_kwDOBxaH0c4BPROP`
+**Owner**: mrlm-net (Organization)
+
+### Issue Management
+
+- Use the `github-issues` skill for creating, updating, and closing issues
 - Agents post decisions (e.g., "Chose X over Y because Z"), blockers, quality gate failures, and phase outcomes
 - Agents do NOT post progress notifications or status updates — keep it human-consumable
+
+### Project Board Status
+
+Every issue must be on the project board with its status kept current throughout the pipeline.
+
+**Status field** (`PVTSSF_lADOBxaH0c4BPROPzg9ufVk`):
+
+| Status | Option ID | When to set |
+|--------|-----------|-------------|
+| Backlog | `f75ad846` | New issues not yet prioritized |
+| Ready | `61e4505c` | Issue is refined and ready for work |
+| In progress | `47fc9ee4` | Implementation started |
+| In review | `df73e18b` | PR opened and review requested |
+| Done | `98236657` | PR merged and issue closed |
+
+**Other fields**:
+
+| Field | ID | Options |
+|-------|----|---------|
+| Priority | `PVTSSF_lADOBxaH0c4BPROPzg9ufYY` | P0 (`79628723`), P1 (`0a877460`), P2 (`da944a9c`) |
+| Size | `PVTSSF_lADOBxaH0c4BPROPzg9ufYc` | XS (`6c6483d2`), S (`f784b110`), M (`7515a9f1`), L (`817d0097`), XL (`db339eb2`) |
+
+### Agent Workflow
+
+1. **Creating an issue**: add to project board immediately
+   ```sh
+   gh project item-add 9 --owner mrlm-net --url <issue-url>
+   ```
+2. **Starting work**: set Status to "In progress"
+3. **Opening PR**: set Status to "In review"
+4. **Merging**: set Status to "Done"
+
+Update fields with:
+```sh
+gh project item-edit --project-id PVT_kwDOBxaH0c4BPROP --id <item-id> --field-id <field-id> --single-select-option-id <option-id>
+```
 
 ## MRLM Plugin Usage
 
