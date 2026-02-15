@@ -42,7 +42,7 @@ type Router struct {
 	runner  Runner
 	logger  *slog.Logger
 	aliases map[string][]string // primary name -> []alias names
-	Config  *config.Config       // Configuration object passed to commands
+	Config  *config.Config      // Configuration object passed to commands
 
 	// Subcommand identity (only set when Router is used as a Command)
 	name string

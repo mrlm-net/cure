@@ -23,7 +23,7 @@ func run(args []string) error {
 	cfg := loadConfig()
 
 	router := terminal.New(terminal.WithConfig(cfg))
-	router.Register(&commands.VersionCommand{})
+	router.Register(commands.NewVersionCommand())
 	router.Register(terminal.NewHelpCommand(router))
 	router.Register(trace.NewTraceCommand())
 	return router.RunArgs(args)
