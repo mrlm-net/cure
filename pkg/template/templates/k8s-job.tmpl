@@ -1,4 +1,4 @@
-# Kubernetes Job: cure trace dns
+# Kubernetes Job: {{ .JobName }}
 #
 # Apply with:
 #   kubectl apply -f k8s-job.yaml
@@ -15,7 +15,7 @@ metadata:
   namespace: {{ .Namespace }}
   labels:
     app.kubernetes.io/name: cure
-    app.kubernetes.io/component: dns-tracer
+    app.kubernetes.io/component: job-runner
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 600
@@ -23,7 +23,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: cure
-        app.kubernetes.io/component: dns-tracer
+        app.kubernetes.io/component: job-runner
         job-name: {{ .JobName }}
     spec:
       restartPolicy: Never
@@ -45,7 +45,7 @@ spec:
 {{- end}}
 {{- end}}
       containers:
-        - name: cure-dns-tracer
+        - name: cure-runner
           image: {{ .Image }}
           resources:
             requests:
@@ -59,8 +59,4 @@ spec:
             - -c
             - |
               go install github.com/mrlm-net/cure/cmd/cure@{{ .Version }} && \
-              cure trace dns {{ .Hostname }} \
-                --count={{ .Count }} \
-                --interval={{ .Interval }} \
-                --timeout={{ .Timeout }}{{ if .Server }} \
-                --server={{ .Server }}{{ end }}
+              cure {{ .CureCommand }}

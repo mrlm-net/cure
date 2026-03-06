@@ -3,307 +3,182 @@ package generate
 import (
 	"bytes"
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
-func newK8sJobContext() (*bytes.Buffer, *bytes.Buffer, *terminal.Context) {
-	var stdout, stderr bytes.Buffer
-	tc := &terminal.Context{
-		Stdout: &stdout,
-		Stderr: &stderr,
-		Config: config.NewConfig(),
-	}
-	return &stdout, &stderr, tc
+func newK8sJobContext(stdout *bytes.Buffer) *terminal.Context {
+	return &terminal.Context{Stdout: stdout}
 }
 
-func TestK8sJobCommand_Run_MissingHostname(t *testing.T) {
-	cmd := &K8sJobCommand{
-		namespace: "default",
-		image:     "golang:1.25-alpine",
-		version:   "latest",
-		count:     30,
-		interval:  10,
-		timeout:   30,
-	}
-
-	_, _, tc := newK8sJobContext()
-	err := cmd.Run(context.Background(), tc)
+func TestK8sJobCommand_Run_MissingCureCommand(t *testing.T) {
+	cmd := &K8sJobCommand{}
+	var buf bytes.Buffer
+	err := cmd.Run(context.Background(), newK8sJobContext(&buf))
 	if err == nil {
-		t.Fatal("expected error for missing --hostname, got nil")
+		t.Fatal("expected error for missing --cure-command, got nil")
 	}
-	if !strings.Contains(err.Error(), "--hostname is required") {
-		t.Errorf("expected '--hostname is required' in error, got: %v", err)
-	}
-}
-
-func TestK8sJobCommand_Run_InvalidServer(t *testing.T) {
-	tests := []struct {
-		name   string
-		server string
-	}{
-		{"plain hostname", "myserver.example.com"},
-		{"hostname with port", "myserver.example.com:53"},
-		{"bare word", "dns"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := &K8sJobCommand{
-				hostname:  "api.example.com",
-				namespace: "default",
-				image:     "golang:1.25-alpine",
-				version:   "latest",
-				count:     30,
-				interval:  10,
-				timeout:   30,
-				server:    tt.server,
-			}
-
-			_, _, tc := newK8sJobContext()
-			err := cmd.Run(context.Background(), tc)
-			if err == nil {
-				t.Fatalf("expected error for server=%q, got nil", tt.server)
-			}
-			if !strings.Contains(err.Error(), "--server must be an IP address") {
-				t.Errorf("expected '--server must be an IP address' in error, got: %v", err)
-			}
-		})
+	if !strings.Contains(err.Error(), "--cure-command") {
+		t.Errorf("error %q does not mention --cure-command", err.Error())
 	}
 }
 
 func TestK8sJobCommand_Run_DefaultOutput(t *testing.T) {
 	cmd := &K8sJobCommand{
-		hostname:  "api.example.com",
-		namespace: "default",
-		image:     "golang:1.25-alpine",
-		version:   "latest",
-		count:     30,
-		interval:  10,
-		timeout:   30,
+		cureCommand: "trace dns myservice.blob.core.windows.net --count 30",
+		namespace:   "default",
+		image:       "golang:1.25-alpine",
+		version:     "latest",
 	}
-
-	stdout, _, tc := newK8sJobContext()
-	err := cmd.Run(context.Background(), tc)
-	if err != nil {
-		t.Fatalf("Run() unexpected error: %v", err)
+	var buf bytes.Buffer
+	if err := cmd.Run(context.Background(), newK8sJobContext(&buf)); err != nil {
+		t.Fatalf("Run() error = %v", err)
 	}
-
-	got := stdout.String()
-	checks := []string{
+	out := buf.String()
+	for _, want := range []string{
 		"kind: Job",
-		"cure-dns-api-example-com",
 		"namespace: default",
-		"api.example.com",
 		"golang:1.25-alpine",
-		"restartPolicy: Never",
-		"backoffLimit: 0",
-		"ttlSecondsAfterFinished: 600",
-		"--count=30",
-		"--interval=10",
-		"--timeout=30",
-	}
-	for _, want := range checks {
-		if !strings.Contains(got, want) {
-			t.Errorf("output missing %q\ngot:\n%s", want, got)
-		}
-	}
-
-	// Server flag must NOT appear when server is empty.
-	if strings.Contains(got, "--server=") {
-		t.Errorf("output should not contain --server= when server is empty\ngot:\n%s", got)
-	}
-}
-
-func TestK8sJobCommand_Run_WithServer(t *testing.T) {
-	cmd := &K8sJobCommand{
-		hostname:  "myservice.default.svc.cluster.local",
-		namespace: "default",
-		image:     "golang:1.25-alpine",
-		version:   "latest",
-		count:     10,
-		interval:  5,
-		timeout:   15,
-		server:    "168.63.129.16",
-	}
-
-	stdout, _, tc := newK8sJobContext()
-	err := cmd.Run(context.Background(), tc)
-	if err != nil {
-		t.Fatalf("Run() unexpected error: %v", err)
-	}
-
-	got := stdout.String()
-	if !strings.Contains(got, "--server=168.63.129.16") {
-		t.Errorf("output missing --server=168.63.129.16\ngot:\n%s", got)
-	}
-}
-
-func TestK8sJobCommand_Run_CustomNamespace(t *testing.T) {
-	cmd := &K8sJobCommand{
-		hostname:  "api.example.com",
-		namespace: "monitoring",
-		image:     "golang:1.25-alpine",
-		version:   "latest",
-		count:     30,
-		interval:  10,
-		timeout:   30,
-	}
-
-	stdout, _, tc := newK8sJobContext()
-	err := cmd.Run(context.Background(), tc)
-	if err != nil {
-		t.Fatalf("Run() unexpected error: %v", err)
-	}
-
-	got := stdout.String()
-	if !strings.Contains(got, "namespace: monitoring") {
-		t.Errorf("output missing 'namespace: monitoring'\ngot:\n%s", got)
-	}
-}
-
-func TestK8sJobCommand_Run_JobNameSanitization(t *testing.T) {
-	tests := []struct {
-		name        string
-		hostname    string
-		wantJobName string
-	}{
-		{
-			name:        "simple hostname",
-			hostname:    "api.example.com",
-			wantJobName: "cure-dns-api-example-com",
-		},
-		{
-			name:        "subdomain",
-			hostname:    "myservice.default.svc.cluster.local",
-			wantJobName: "cure-dns-myservice-default-svc-cluster-local",
-		},
-		{
-			name:        "no dots",
-			hostname:    "localhost",
-			wantJobName: "cure-dns-localhost",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := buildJobName(tt.hostname)
-			if got != tt.wantJobName {
-				t.Errorf("buildJobName(%q) = %q, want %q", tt.hostname, got, tt.wantJobName)
-			}
-		})
-	}
-}
-
-func TestK8sJobCommand_Run_JobNameTruncation(t *testing.T) {
-	// A very long hostname should be truncated to ≤52 chars.
-	longHostname := "very-long-service-name.my-very-long-namespace.svc.cluster.local"
-	got := buildJobName(longHostname)
-	if len(got) > 52 {
-		t.Errorf("buildJobName() result too long: %d chars, want ≤52\ngot: %s", len(got), got)
-	}
-	if strings.HasSuffix(got, "-") {
-		t.Errorf("buildJobName() result must not end with a dash, got: %s", got)
-	}
-}
-
-func TestK8sJobCommand_Run_OutputFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	outPath := filepath.Join(tmpDir, "job.yaml")
-
-	cmd := &K8sJobCommand{
-		hostname:  "api.example.com",
-		namespace: "default",
-		image:     "golang:1.25-alpine",
-		version:   "v0.5.0",
-		count:     5,
-		interval:  2,
-		timeout:   10,
-		output:    outPath,
-	}
-
-	stdout, _, tc := newK8sJobContext()
-	err := cmd.Run(context.Background(), tc)
-	if err != nil {
-		t.Fatalf("Run() unexpected error: %v", err)
-	}
-
-	// Stdout should confirm the file was written.
-	if !strings.Contains(stdout.String(), outPath) {
-		t.Errorf("stdout should mention output path, got: %s", stdout.String())
-	}
-
-	// File should exist and contain expected content.
-	content, err := os.ReadFile(outPath)
-	if err != nil {
-		t.Fatalf("failed to read output file: %v", err)
-	}
-
-	got := string(content)
-	checks := []string{
-		"kind: Job",
-		"cure-dns-api-example-com",
-		"v0.5.0",
-		"--count=5",
-	}
-	for _, want := range checks {
-		if !strings.Contains(got, want) {
-			t.Errorf("file missing %q\ngot:\n%s", want, got)
+		"cure trace dns myservice.blob.core.windows.net --count 30",
+		"job-name: cure-trace-dns",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q", want)
 		}
 	}
 }
 
-func TestK8sJobCommand_FlagsDefaults(t *testing.T) {
-	cmd := &K8sJobCommand{}
-	fs := cmd.Flags()
-	// Parse empty args to get defaults.
-	if err := fs.Parse([]string{}); err != nil {
-		t.Fatalf("Flags().Parse() error: %v", err)
+func TestK8sJobCommand_Run_HTTPTrace(t *testing.T) {
+	cmd := &K8sJobCommand{
+		cureCommand: "trace http https://api.internal.example.com",
+		namespace:   "monitoring",
+		image:       "golang:1.25-alpine",
+		version:     "latest",
 	}
-
-	if cmd.namespace != "default" {
-		t.Errorf("default namespace = %q, want %q", cmd.namespace, "default")
+	var buf bytes.Buffer
+	if err := cmd.Run(context.Background(), newK8sJobContext(&buf)); err != nil {
+		t.Fatalf("Run() error = %v", err)
 	}
-	if cmd.image != "golang:1.25-alpine" {
-		t.Errorf("default image = %q, want %q", cmd.image, "golang:1.25-alpine")
+	out := buf.String()
+	if !strings.Contains(out, "cure trace http https://api.internal.example.com") {
+		t.Error("output missing the http trace command")
 	}
-	if cmd.version != "latest" {
-		t.Errorf("default version = %q, want %q", cmd.version, "latest")
-	}
-	if cmd.count != 30 {
-		t.Errorf("default count = %d, want 30", cmd.count)
-	}
-	if cmd.interval != 10 {
-		t.Errorf("default interval = %d, want 10", cmd.interval)
-	}
-	if cmd.timeout != 30 {
-		t.Errorf("default timeout = %d, want 30", cmd.timeout)
+	if !strings.Contains(out, "namespace: monitoring") {
+		t.Error("output missing namespace")
 	}
 }
 
-func TestK8sJobCommand_ValidServerIP(t *testing.T) {
+func TestK8sJobCommand_Run_WithNodeSelector(t *testing.T) {
+	cmd := &K8sJobCommand{
+		cureCommand:  "trace dns api.example.com",
+		namespace:    "default",
+		image:        "golang:1.25-alpine",
+		version:      "latest",
+		nodeSelector: "agentpool=openaisvc",
+	}
+	var buf bytes.Buffer
+	if err := cmd.Run(context.Background(), newK8sJobContext(&buf)); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "nodeSelector:") {
+		t.Error("output missing nodeSelector")
+	}
+	if !strings.Contains(out, "agentpool: openaisvc") {
+		t.Error("output missing agentpool selector")
+	}
+}
+
+func TestK8sJobCommand_Run_WithToleration(t *testing.T) {
+	cmd := &K8sJobCommand{
+		cureCommand: "trace dns api.example.com",
+		namespace:   "default",
+		image:       "golang:1.25-alpine",
+		version:     "latest",
+		toleration:  "kubernetes.azure.com/scalesetpriority=spot:NoSchedule",
+	}
+	var buf bytes.Buffer
+	if err := cmd.Run(context.Background(), newK8sJobContext(&buf)); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "tolerations:") {
+		t.Error("output missing tolerations")
+	}
+	if !strings.Contains(out, `key: "kubernetes.azure.com/scalesetpriority"`) {
+		t.Error("output missing toleration key")
+	}
+	if !strings.Contains(out, "operator: Equal") {
+		t.Error("output missing Equal operator")
+	}
+	if !strings.Contains(out, `value: "spot"`) {
+		t.Error("output missing toleration value")
+	}
+}
+
+func TestK8sJobCommand_Run_JobNameOverride(t *testing.T) {
+	cmd := &K8sJobCommand{
+		cureCommand: "trace dns api.example.com",
+		jobName:     "my-custom-job",
+		namespace:   "default",
+		image:       "golang:1.25-alpine",
+		version:     "latest",
+	}
+	var buf bytes.Buffer
+	if err := cmd.Run(context.Background(), newK8sJobContext(&buf)); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "name: my-custom-job") {
+		t.Error("output missing overridden job name")
+	}
+}
+
+func TestK8sJobCommand_Run_InvalidNodeSelector(t *testing.T) {
+	cmd := &K8sJobCommand{
+		cureCommand:  "trace dns api.example.com",
+		nodeSelector: "notakeyvalue",
+	}
+	var buf bytes.Buffer
+	err := cmd.Run(context.Background(), newK8sJobContext(&buf))
+	if err == nil {
+		t.Fatal("expected error for invalid node selector, got nil")
+	}
+}
+
+func TestK8sJobCommand_Run_InvalidToleration(t *testing.T) {
+	cmd := &K8sJobCommand{
+		cureCommand: "trace dns api.example.com",
+		toleration:  "noeffect",
+	}
+	var buf bytes.Buffer
+	err := cmd.Run(context.Background(), newK8sJobContext(&buf))
+	if err == nil {
+		t.Fatal("expected error for invalid toleration, got nil")
+	}
+}
+
+func TestDeriveJobName(t *testing.T) {
 	tests := []struct {
 		name    string
-		server  string
-		wantErr bool
+		command string
+		want    string
 	}{
-		{"plain IPv4", "168.63.129.16", false},
-		{"IPv4 with port", "168.63.129.16:53", false},
-		{"IPv6 with brackets and port", "[::1]:53", false},
-		{"hostname rejected", "dns.google", true},
-		{"hostname with port rejected", "dns.google:53", true},
+		{"dns trace", "trace dns myservice.blob.core.windows.net --count 30", "cure-trace-dns"},
+		{"http trace", "trace http https://api.example.com", "cure-trace-http"},
+		{"tcp trace", "trace tcp 10.0.0.5:6379", "cure-trace-tcp"},
+		{"single word", "version", "cure-version"},
+		{"uppercase sanitized", "TRACE DNS example.com", "cure-trace-dns"},
+		{"flags stop token collection", "trace --dry-run dns", "cure-trace"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateServerIP(tt.server)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateServerIP(%q) error = %v, wantErr %v", tt.server, err, tt.wantErr)
+			got := deriveJobName(tt.command)
+			if got != tt.want {
+				t.Errorf("deriveJobName(%q) = %q, want %q", tt.command, got, tt.want)
 			}
 		})
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"strings"
 
@@ -20,16 +19,13 @@ type k8sToleration struct {
 	Effect   string
 }
 
-// K8sJobCommand generates a Kubernetes Job manifest for cure trace dns.
+// K8sJobCommand generates a Kubernetes Job manifest that runs any cure command in-cluster.
 type K8sJobCommand struct {
-	hostname     string
+	cureCommand  string // full cure subcommand + args, e.g. "trace dns example.com --count 30"
+	jobName      string // override auto-derived job name
 	namespace    string
 	image        string
 	version      string
-	count        int
-	interval     int
-	timeout      int
-	server       string
 	nodeSelector string // comma-separated key=value pairs
 	toleration   string // comma-separated key=value:effect or key:effect specs
 	output       string // "" = stdout
@@ -37,61 +33,59 @@ type K8sJobCommand struct {
 
 func (c *K8sJobCommand) Name() string { return "k8s-job" }
 func (c *K8sJobCommand) Description() string {
-	return "Generate a Kubernetes Job manifest to run cure trace dns in-cluster"
+	return "Generate a Kubernetes Job manifest to run any cure command in-cluster"
 }
 func (c *K8sJobCommand) Usage() string {
 	return `Usage: cure generate k8s-job [flags]
 
-Generate a Kubernetes Job manifest that runs "cure trace dns" inside a cluster.
-Useful for diagnosing in-cluster DNS resolution issues from within the pod network.
+Generate a Kubernetes Job manifest that runs any cure command inside a cluster.
+Useful for diagnosing in-cluster issues (DNS flapping, HTTP connectivity, TCP
+reachability) from within the pod network of a specific namespace or node pool.
 
 Required flags:
-  --hostname       Hostname to trace (required)
+  --cure-command   Full cure subcommand and args (required)
 
 Optional flags:
+  --job-name       Override auto-derived job name
   --namespace      Kubernetes namespace (default: default)
   --image          Container image (default: golang:1.25-alpine)
   --cure-version   cure version to install, e.g. v0.5.0 (default: latest)
-  --count          Number of DNS queries to run (default: 30)
-  --interval       Seconds between queries (default: 10)
-  --timeout        Per-query timeout in seconds (default: 30)
-  --server         DNS server IP address, e.g. 168.63.129.16 (optional)
-  --node-selector  Comma-separated key=value node labels, e.g. agentpool=gpupool (optional)
-  --toleration     Comma-separated toleration specs: key=value:effect or key:effect (optional)
+  --node-selector  Comma-separated key=value node labels (e.g. agentpool=gpupool)
+  --toleration     Comma-separated toleration specs: key=value:effect or key:effect
   --output         Output file path; empty = stdout (default: "")
 
 Examples:
-  # Print manifest to stdout
-  cure generate k8s-job --hostname myservice.default.svc.cluster.local
-
-  # Target an AKS node pool (VMSS)
+  # DNS trace — print manifest to stdout
   cure generate k8s-job \
-    --hostname myservice.blob.core.windows.net \
-    --namespace openai-svc \
-    --node-selector agentpool=openaisvc \
-    --output job.yaml
+    --cure-command "trace dns myservice.blob.core.windows.net --count 60 --interval 10 --server 168.63.129.16" \
+    --namespace openai-svc
 
-  # Target a spot node pool (with taint toleration)
+  # HTTP trace — target a specific AKS node pool
   cure generate k8s-job \
-    --hostname myservice.blob.core.windows.net \
+    --cure-command "trace http https://api.internal.example.com" \
+    --namespace monitoring \
+    --node-selector "agentpool=appnodes"
+
+  # Spot node pool (with taint toleration)
+  cure generate k8s-job \
+    --cure-command "trace dns myservice.blob.core.windows.net --count 30" \
     --node-selector "kubernetes.azure.com/agentpool=spotnodes" \
     --toleration "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
 
   # Apply directly via kubectl
-  cure generate k8s-job --hostname api.example.com | kubectl apply -f -
+  cure generate k8s-job \
+    --cure-command "trace dns api.example.com" \
+    --namespace default | kubectl apply -f -
 `
 }
 
 func (c *K8sJobCommand) Flags() *flag.FlagSet {
 	fs := flag.NewFlagSet("k8s-job", flag.ContinueOnError)
-	fs.StringVar(&c.hostname, "hostname", "", "Hostname to trace (required)")
+	fs.StringVar(&c.cureCommand, "cure-command", "", "Full cure subcommand and args (required)")
+	fs.StringVar(&c.jobName, "job-name", "", "Override auto-derived job name")
 	fs.StringVar(&c.namespace, "namespace", "default", "Target Kubernetes namespace")
 	fs.StringVar(&c.image, "image", "golang:1.25-alpine", "Container image")
 	fs.StringVar(&c.version, "cure-version", "latest", "cure version to install (e.g. v0.5.0 or latest)")
-	fs.IntVar(&c.count, "count", 30, "Number of DNS queries to run")
-	fs.IntVar(&c.interval, "interval", 10, "Seconds between queries")
-	fs.IntVar(&c.timeout, "timeout", 30, "Per-query timeout in seconds")
-	fs.StringVar(&c.server, "server", "", "DNS server IP address (optional, e.g. 168.63.129.16)")
 	fs.StringVar(&c.nodeSelector, "node-selector", "", "Comma-separated key=value node labels (e.g. agentpool=gpupool)")
 	fs.StringVar(&c.toleration, "toleration", "", "Comma-separated toleration specs: key=value:effect or key:effect")
 	fs.StringVar(&c.output, "output", "", "Output file path (empty = stdout)")
@@ -99,19 +93,14 @@ func (c *K8sJobCommand) Flags() *flag.FlagSet {
 }
 
 func (c *K8sJobCommand) Run(ctx context.Context, tc *terminal.Context) error {
-	// Validate required --hostname flag.
-	if c.hostname == "" {
-		return fmt.Errorf("--hostname is required")
+	if c.cureCommand == "" {
+		return fmt.Errorf("--cure-command is required")
 	}
 
-	// Validate --server if provided: must be an IP, not a hostname.
-	if c.server != "" {
-		if err := validateServerIP(c.server); err != nil {
-			return err
-		}
+	jobName := c.jobName
+	if jobName == "" {
+		jobName = deriveJobName(c.cureCommand)
 	}
-
-	jobName := buildJobName(c.hostname)
 
 	nodeSelector, err := parseNodeSelector(c.nodeSelector)
 	if err != nil {
@@ -126,13 +115,9 @@ func (c *K8sJobCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	data := map[string]any{
 		"JobName":      jobName,
 		"Namespace":    c.namespace,
-		"Hostname":     c.hostname,
+		"CureCommand":  c.cureCommand,
 		"Image":        c.image,
 		"Version":      c.version,
-		"Count":        c.count,
-		"Interval":     c.interval,
-		"Timeout":      c.timeout,
-		"Server":       c.server,
 		"NodeSelector": nodeSelector,
 		"Tolerations":  tolerations,
 	}
@@ -156,8 +141,60 @@ func (c *K8sJobCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	return nil
 }
 
+// deriveJobName builds a Kubernetes-safe job name from the cure command string.
+// Collects only pure-alpha tokens (subcommand words like "trace", "dns", "http"),
+// stopping at the first argument that contains non-letter characters (hostnames,
+// URLs, IPs, ports) or at a flag prefix "-".
+// Example: "trace dns example.com --count 30" → "cure-trace-dns"
+func deriveJobName(cureCommand string) string {
+	parts := strings.Fields(cureCommand)
+	var tokens []string
+	for _, p := range parts {
+		if strings.HasPrefix(p, "-") {
+			break
+		}
+		// Stop at non-alpha tokens (hostnames, URLs, IPs, etc.)
+		if !isAlpha(p) {
+			break
+		}
+		tokens = append(tokens, p)
+		if len(tokens) == 3 {
+			break
+		}
+	}
+	name := "cure-" + strings.Join(tokens, "-")
+	// Sanitize: replace dots, slashes, and other non-DNS characters with dashes.
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r + 32) // toLower
+		default:
+			b.WriteRune('-')
+		}
+	}
+	result := strings.Trim(b.String(), "-")
+	// Kubernetes name max length is 63 characters.
+	if len(result) > 63 {
+		result = strings.TrimRight(result[:63], "-")
+	}
+	return result
+}
+
+// isAlpha reports whether s contains only ASCII letters.
+func isAlpha(s string) bool {
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
 // parseNodeSelector parses a comma-separated "key=value" string into a map.
-// Returns nil (not an empty map) when s is empty so the template can test {{if .NodeSelector}}.
+// Returns nil when s is empty so the template can test {{if .NodeSelector}}.
 func parseNodeSelector(s string) (map[string]string, error) {
 	if s == "" {
 		return nil, nil
@@ -205,7 +242,6 @@ func parseTolerations(s string) ([]k8sToleration, error) {
 // parseSingleToleration parses one toleration spec.
 // Formats: "key=value:effect" → Equal operator, "key:effect" → Exists operator.
 func parseSingleToleration(spec string) (k8sToleration, error) {
-	// Split off the trailing ":effect" first.
 	lastColon := strings.LastIndex(spec, ":")
 	if lastColon < 0 {
 		return k8sToleration{}, fmt.Errorf("invalid --toleration %q: expected key:effect or key=value:effect", spec)
@@ -217,47 +253,14 @@ func parseSingleToleration(spec string) (k8sToleration, error) {
 	}
 
 	if k, v, ok := strings.Cut(keyPart, "="); ok {
-		// key=value:effect → operator Equal
 		if k == "" || v == "" {
 			return k8sToleration{}, fmt.Errorf("invalid --toleration %q: key and value must be non-empty", spec)
 		}
 		return k8sToleration{Key: k, Value: v, Operator: "Equal", Effect: effect}, nil
 	}
-	// key:effect → operator Exists
 	if keyPart == "" {
 		return k8sToleration{}, fmt.Errorf("invalid --toleration %q: key is empty", spec)
 	}
 	return k8sToleration{Key: keyPart, Operator: "Exists", Effect: effect}, nil
 }
 
-// validateServerIP ensures the server value is an IP address (with optional port),
-// not a hostname. Mirrors the normalizeServer logic in internal/commands/trace/dns.go.
-func validateServerIP(s string) error {
-	if strings.Contains(s, ":") {
-		host, _, err := net.SplitHostPort(s)
-		if err != nil {
-			return fmt.Errorf("invalid --server %q: %w", s, err)
-		}
-		if net.ParseIP(host) == nil {
-			return fmt.Errorf("--server must be an IP address, got hostname %q", host)
-		}
-		return nil
-	}
-	if net.ParseIP(s) == nil {
-		return fmt.Errorf("--server must be an IP address, got %q", s)
-	}
-	return nil
-}
-
-// buildJobName produces a valid Kubernetes Job name from a hostname.
-// Dots are replaced with dashes and the result is truncated to 52 characters
-// to leave room for the Kubernetes-appended pod name suffix.
-func buildJobName(hostname string) string {
-	name := "cure-dns-" + strings.ReplaceAll(hostname, ".", "-")
-	if len(name) > 52 {
-		name = name[:52]
-	}
-	// Trim any trailing dashes that may result from truncation.
-	name = strings.TrimRight(name, "-")
-	return name
-}
