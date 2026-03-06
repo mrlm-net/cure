@@ -27,6 +27,23 @@ spec:
         job-name: {{ .JobName }}
     spec:
       restartPolicy: Never
+{{- if .NodeSelector}}
+      nodeSelector:
+{{- range $k, $v := .NodeSelector}}
+        {{ $k }}: {{ $v }}
+{{- end}}
+{{- end}}
+{{- if .Tolerations}}
+      tolerations:
+{{- range .Tolerations}}
+        - key: "{{ .Key }}"
+          operator: {{ .Operator }}
+{{- if .Value}}
+          value: "{{ .Value }}"
+{{- end}}
+          effect: {{ .Effect }}
+{{- end}}
+{{- end}}
       containers:
         - name: cure-dns-tracer
           image: {{ .Image }}

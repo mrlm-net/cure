@@ -12,17 +12,27 @@ import (
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
+// k8sToleration represents a single Kubernetes toleration entry.
+type k8sToleration struct {
+	Key      string
+	Value    string
+	Operator string // Equal or Exists
+	Effect   string
+}
+
 // K8sJobCommand generates a Kubernetes Job manifest for cure trace dns.
 type K8sJobCommand struct {
-	hostname  string
-	namespace string
-	image     string
-	version   string
-	count     int
-	interval  int
-	timeout   int
-	server    string
-	output    string // "" = stdout
+	hostname     string
+	namespace    string
+	image        string
+	version      string
+	count        int
+	interval     int
+	timeout      int
+	server       string
+	nodeSelector string // comma-separated key=value pairs
+	toleration   string // comma-separated key=value:effect or key:effect specs
+	output       string // "" = stdout
 }
 
 func (c *K8sJobCommand) Name() string { return "k8s-job" }
@@ -46,18 +56,26 @@ Optional flags:
   --interval       Seconds between queries (default: 10)
   --timeout        Per-query timeout in seconds (default: 30)
   --server         DNS server IP address, e.g. 168.63.129.16 (optional)
+  --node-selector  Comma-separated key=value node labels, e.g. agentpool=gpupool (optional)
+  --toleration     Comma-separated toleration specs: key=value:effect or key:effect (optional)
   --output         Output file path; empty = stdout (default: "")
 
 Examples:
   # Print manifest to stdout
   cure generate k8s-job --hostname myservice.default.svc.cluster.local
 
-  # Write manifest to file
+  # Target an AKS node pool (VMSS)
   cure generate k8s-job \
-    --hostname myservice.default.svc.cluster.local \
-    --namespace monitoring \
-    --server 168.63.129.16 \
+    --hostname myservice.blob.core.windows.net \
+    --namespace openai-svc \
+    --node-selector agentpool=openaisvc \
     --output job.yaml
+
+  # Target a spot node pool (with taint toleration)
+  cure generate k8s-job \
+    --hostname myservice.blob.core.windows.net \
+    --node-selector "kubernetes.azure.com/agentpool=spotnodes" \
+    --toleration "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
 
   # Apply directly via kubectl
   cure generate k8s-job --hostname api.example.com | kubectl apply -f -
@@ -74,6 +92,8 @@ func (c *K8sJobCommand) Flags() *flag.FlagSet {
 	fs.IntVar(&c.interval, "interval", 10, "Seconds between queries")
 	fs.IntVar(&c.timeout, "timeout", 30, "Per-query timeout in seconds")
 	fs.StringVar(&c.server, "server", "", "DNS server IP address (optional, e.g. 168.63.129.16)")
+	fs.StringVar(&c.nodeSelector, "node-selector", "", "Comma-separated key=value node labels (e.g. agentpool=gpupool)")
+	fs.StringVar(&c.toleration, "toleration", "", "Comma-separated toleration specs: key=value:effect or key:effect")
 	fs.StringVar(&c.output, "output", "", "Output file path (empty = stdout)")
 	return fs
 }
@@ -93,16 +113,28 @@ func (c *K8sJobCommand) Run(ctx context.Context, tc *terminal.Context) error {
 
 	jobName := buildJobName(c.hostname)
 
+	nodeSelector, err := parseNodeSelector(c.nodeSelector)
+	if err != nil {
+		return err
+	}
+
+	tolerations, err := parseTolerations(c.toleration)
+	if err != nil {
+		return err
+	}
+
 	data := map[string]any{
-		"JobName":   jobName,
-		"Namespace": c.namespace,
-		"Hostname":  c.hostname,
-		"Image":     c.image,
-		"Version":   c.version,
-		"Count":     c.count,
-		"Interval":  c.interval,
-		"Timeout":   c.timeout,
-		"Server":    c.server,
+		"JobName":      jobName,
+		"Namespace":    c.namespace,
+		"Hostname":     c.hostname,
+		"Image":        c.image,
+		"Version":      c.version,
+		"Count":        c.count,
+		"Interval":     c.interval,
+		"Timeout":      c.timeout,
+		"Server":       c.server,
+		"NodeSelector": nodeSelector,
+		"Tolerations":  tolerations,
 	}
 
 	output, err := template.Render("k8s-job", data)
@@ -122,6 +154,80 @@ func (c *K8sJobCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	fmt.Fprintf(tc.Stdout, "Generated %s\n", c.output)
 	fmt.Fprintf(tc.Stdout, "\nApply with:\n  kubectl apply -f %s\n", c.output)
 	return nil
+}
+
+// parseNodeSelector parses a comma-separated "key=value" string into a map.
+// Returns nil (not an empty map) when s is empty so the template can test {{if .NodeSelector}}.
+func parseNodeSelector(s string) (map[string]string, error) {
+	if s == "" {
+		return nil, nil
+	}
+	result := make(map[string]string)
+	for pair := range strings.SplitSeq(s, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		k, v, ok := strings.Cut(pair, "=")
+		if !ok || k == "" || v == "" {
+			return nil, fmt.Errorf("invalid --node-selector %q: expected key=value", pair)
+		}
+		result[k] = v
+	}
+	if len(result) == 0 {
+		return nil, nil
+	}
+	return result, nil
+}
+
+// parseTolerations parses a comma-separated toleration spec string.
+// Each spec is either "key=value:effect" (operator: Equal) or "key:effect" (operator: Exists).
+// Returns nil when s is empty so the template can test {{if .Tolerations}}.
+func parseTolerations(s string) ([]k8sToleration, error) {
+	if s == "" {
+		return nil, nil
+	}
+	var result []k8sToleration
+	for spec := range strings.SplitSeq(s, ",") {
+		spec = strings.TrimSpace(spec)
+		if spec == "" {
+			continue
+		}
+		t, err := parseSingleToleration(spec)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, t)
+	}
+	return result, nil
+}
+
+// parseSingleToleration parses one toleration spec.
+// Formats: "key=value:effect" → Equal operator, "key:effect" → Exists operator.
+func parseSingleToleration(spec string) (k8sToleration, error) {
+	// Split off the trailing ":effect" first.
+	lastColon := strings.LastIndex(spec, ":")
+	if lastColon < 0 {
+		return k8sToleration{}, fmt.Errorf("invalid --toleration %q: expected key:effect or key=value:effect", spec)
+	}
+	keyPart := spec[:lastColon]
+	effect := spec[lastColon+1:]
+	if effect == "" {
+		return k8sToleration{}, fmt.Errorf("invalid --toleration %q: effect is empty", spec)
+	}
+
+	if k, v, ok := strings.Cut(keyPart, "="); ok {
+		// key=value:effect → operator Equal
+		if k == "" || v == "" {
+			return k8sToleration{}, fmt.Errorf("invalid --toleration %q: key and value must be non-empty", spec)
+		}
+		return k8sToleration{Key: k, Value: v, Operator: "Equal", Effect: effect}, nil
+	}
+	// key:effect → operator Exists
+	if keyPart == "" {
+		return k8sToleration{}, fmt.Errorf("invalid --toleration %q: key is empty", spec)
+	}
+	return k8sToleration{Key: keyPart, Operator: "Exists", Effect: effect}, nil
 }
 
 // validateServerIP ensures the server value is an IP address (with optional port),
