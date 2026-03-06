@@ -11,5 +11,6 @@ func NewGenerateCommand() terminal.Command {
 		terminal.WithDescription("Generate project files (CLAUDE.md, configs, etc.)"),
 	)
 	router.Register(&ClaudeMDCommand{})
+	router.Register(&K8sJobCommand{})
 	return router
 }
