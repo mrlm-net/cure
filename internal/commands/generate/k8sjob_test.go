@@ -29,8 +29,7 @@ func TestK8sJobCommand_Run_DefaultOutput(t *testing.T) {
 	cmd := &K8sJobCommand{
 		cureCommand: "trace dns myservice.blob.core.windows.net --count 30",
 		namespace:   "default",
-		image:       "golang:1.25-alpine",
-		version:     "latest",
+		image:       "ghcr.io/mrlm-net/cure:latest",
 	}
 	var buf bytes.Buffer
 	if err := cmd.Run(context.Background(), newK8sJobContext(&buf)); err != nil {
@@ -40,8 +39,10 @@ func TestK8sJobCommand_Run_DefaultOutput(t *testing.T) {
 	for _, want := range []string{
 		"kind: Job",
 		"namespace: default",
-		"golang:1.25-alpine",
-		"cure trace dns myservice.blob.core.windows.net --count 30",
+		"ghcr.io/mrlm-net/cure:latest",
+		`- "trace"`,
+		`- "dns"`,
+		`- "myservice.blob.core.windows.net"`,
 		"job-name: cure-trace-dns",
 	} {
 		if !strings.Contains(out, want) {
@@ -54,16 +55,15 @@ func TestK8sJobCommand_Run_HTTPTrace(t *testing.T) {
 	cmd := &K8sJobCommand{
 		cureCommand: "trace http https://api.internal.example.com",
 		namespace:   "monitoring",
-		image:       "golang:1.25-alpine",
-		version:     "latest",
+		image:       "ghcr.io/mrlm-net/cure:latest",
 	}
 	var buf bytes.Buffer
 	if err := cmd.Run(context.Background(), newK8sJobContext(&buf)); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "cure trace http https://api.internal.example.com") {
-		t.Error("output missing the http trace command")
+	if !strings.Contains(out, `- "trace"`) || !strings.Contains(out, `- "http"`) {
+		t.Error("output missing trace http args")
 	}
 	if !strings.Contains(out, "namespace: monitoring") {
 		t.Error("output missing namespace")
@@ -74,8 +74,7 @@ func TestK8sJobCommand_Run_WithNodeSelector(t *testing.T) {
 	cmd := &K8sJobCommand{
 		cureCommand:  "trace dns api.example.com",
 		namespace:    "default",
-		image:        "golang:1.25-alpine",
-		version:      "latest",
+		image:        "ghcr.io/mrlm-net/cure:latest",
 		nodeSelector: "agentpool=openaisvc",
 	}
 	var buf bytes.Buffer
@@ -95,8 +94,7 @@ func TestK8sJobCommand_Run_WithToleration(t *testing.T) {
 	cmd := &K8sJobCommand{
 		cureCommand: "trace dns api.example.com",
 		namespace:   "default",
-		image:       "golang:1.25-alpine",
-		version:     "latest",
+		image:       "ghcr.io/mrlm-net/cure:latest",
 		toleration:  "kubernetes.azure.com/scalesetpriority=spot:NoSchedule",
 	}
 	var buf bytes.Buffer
@@ -123,8 +121,7 @@ func TestK8sJobCommand_Run_JobNameOverride(t *testing.T) {
 		cureCommand: "trace dns api.example.com",
 		jobName:     "my-custom-job",
 		namespace:   "default",
-		image:       "golang:1.25-alpine",
-		version:     "latest",
+		image:       "ghcr.io/mrlm-net/cure:latest",
 	}
 	var buf bytes.Buffer
 	if err := cmd.Run(context.Background(), newK8sJobContext(&buf)); err != nil {
@@ -157,6 +154,20 @@ func TestK8sJobCommand_Run_InvalidToleration(t *testing.T) {
 	err := cmd.Run(context.Background(), newK8sJobContext(&buf))
 	if err == nil {
 		t.Fatal("expected error for invalid toleration, got nil")
+	}
+}
+
+func TestK8sJobCommand_Run_CustomImage(t *testing.T) {
+	cmd := &K8sJobCommand{
+		cureCommand: "trace dns api.example.com",
+		image:       "myacr.azurecr.io/cure:v0.5.0",
+	}
+	var buf bytes.Buffer
+	if err := cmd.Run(context.Background(), newK8sJobContext(&buf)); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if !strings.Contains(buf.String(), "myacr.azurecr.io/cure:v0.5.0") {
+		t.Error("output missing custom image")
 	}
 }
 

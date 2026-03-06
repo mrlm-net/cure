@@ -25,7 +25,6 @@ type K8sJobCommand struct {
 	jobName      string // override auto-derived job name
 	namespace    string
 	image        string
-	version      string
 	nodeSelector string // comma-separated key=value pairs
 	toleration   string // comma-separated key=value:effect or key:effect specs
 	output       string // "" = stdout
@@ -48,8 +47,8 @@ Required flags:
 Optional flags:
   --job-name       Override auto-derived job name
   --namespace      Kubernetes namespace (default: default)
-  --image          Container image (default: golang:1.25-alpine)
-  --cure-version   cure version to install, e.g. v0.5.0 (default: latest)
+  --image          Container image with cure pre-installed (default: ghcr.io/mrlm-net/cure:latest)
+                   Use your own registry: myacr.azurecr.io/cure:v0.5.0
   --node-selector  Comma-separated key=value node labels (e.g. agentpool=gpupool)
   --toleration     Comma-separated toleration specs: key=value:effect or key:effect
   --output         Output file path; empty = stdout (default: "")
@@ -84,8 +83,7 @@ func (c *K8sJobCommand) Flags() *flag.FlagSet {
 	fs.StringVar(&c.cureCommand, "cure-command", "", "Full cure subcommand and args (required)")
 	fs.StringVar(&c.jobName, "job-name", "", "Override auto-derived job name")
 	fs.StringVar(&c.namespace, "namespace", "default", "Target Kubernetes namespace")
-	fs.StringVar(&c.image, "image", "golang:1.25-alpine", "Container image")
-	fs.StringVar(&c.version, "cure-version", "latest", "cure version to install (e.g. v0.5.0 or latest)")
+	fs.StringVar(&c.image, "image", "ghcr.io/mrlm-net/cure:latest", "Container image with cure pre-installed (e.g. myacr.azurecr.io/cure:v0.5.0)")
 	fs.StringVar(&c.nodeSelector, "node-selector", "", "Comma-separated key=value node labels (e.g. agentpool=gpupool)")
 	fs.StringVar(&c.toleration, "toleration", "", "Comma-separated toleration specs: key=value:effect or key:effect")
 	fs.StringVar(&c.output, "output", "", "Output file path (empty = stdout)")
@@ -115,9 +113,8 @@ func (c *K8sJobCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	data := map[string]any{
 		"JobName":      jobName,
 		"Namespace":    c.namespace,
-		"CureCommand":  c.cureCommand,
+		"CureArgs":     strings.Fields(c.cureCommand),
 		"Image":        c.image,
-		"Version":      c.version,
 		"NodeSelector": nodeSelector,
 		"Tolerations":  tolerations,
 	}

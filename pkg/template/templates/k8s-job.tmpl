@@ -55,8 +55,8 @@ spec:
               cpu: 100m
               memory: 128Mi
           command:
-            - /bin/sh
-            - -c
-            - |
-              go install github.com/mrlm-net/cure/cmd/cure@{{ .Version }} && \
-              cure {{ .CureCommand }}
+            - cure
+          args:
+{{- range .CureArgs}}
+            - "{{ . }}"
+{{- end}}

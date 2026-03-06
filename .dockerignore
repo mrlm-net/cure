@@ -1,0 +1,6 @@
+bin/
+coverage.out
+*.md
+.git/
+.github/
+.claude/

@@ -1,8 +1,10 @@
-.PHONY: build test lint clean
+.PHONY: build test lint clean docker-build docker-push
 
-BINARY := cure
-MODULE := github.com/mrlm-net/cure
+BINARY    := cure
+MODULE    := github.com/mrlm-net/cure
 BUILD_DIR := bin
+IMAGE     ?= ghcr.io/mrlm-net/cure
+TAG       ?= latest
 
 build:
 	go build -o $(BUILD_DIR)/$(BINARY) ./cmd/cure
@@ -19,3 +21,9 @@ lint:
 
 clean:
 	rm -rf $(BUILD_DIR) coverage.out
+
+docker-build:
+	docker build --tag $(IMAGE):$(TAG) .
+
+docker-push:
+	docker push $(IMAGE):$(TAG)
