@@ -70,11 +70,12 @@ source <(cure completion bash)
 
 ### Tracing
 
+- `cure trace dns <hostname>` — Trace DNS resolution with IP addresses, CNAME chain, resolution timing, and RFC 1918 private IP classification
 - `cure trace http <url>` — Trace HTTP request with DNS resolution, TLS handshake, request/response headers, and timing
 - `cure trace tcp <address>` — Trace TCP connection with handshake timing and connection metadata
 - `cure trace udp <address>` — Trace UDP packet exchange with send/receive timing
 
-**Common flags**: `--format` (ndjson|html), `--output <file>`, `--dry-run`
+**Common flags**: `--format` (json|html), `--output <file>`, `--dry-run`
 
 ### Generation
 

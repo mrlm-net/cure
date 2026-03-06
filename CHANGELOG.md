@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `pkg/tracer/dns` — DNS resolution tracer library with `TraceDNS(ctx, hostname, ...Option)` API; functional options `WithEmitter`, `WithDryRun`, `WithTimeout`, `WithServer`, `WithCount`, `WithInterval`
+- `pkg/tracer/dns`: emits `dns_query_start` and `dns_query_done` events with resolved IP addresses, CNAME chain, resolution duration, optional error, and RFC 1918 private IP classification per address
+- `cmd/cure`: `trace dns <hostname>` subcommand with `--format` (json|html), `--out-file`, `--dry-run`, `--timeout`, `--server` (IP or IP:port), `--count`, and `--interval` flags
+- `cure trace dns --server`: accepts IP addresses only — hostnames are rejected to avoid DNS bootstrapping circularity
+- `cure trace dns --count` + `--interval`: repeat query N times with configurable delay for detecting intermittent DNS flapping
+
 ## [0.3.0] - 2026-02-14
 
 ### Added

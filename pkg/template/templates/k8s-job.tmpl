@@ -1,0 +1,66 @@
+# Kubernetes Job: cure trace dns
+#
+# Apply with:
+#   kubectl apply -f k8s-job.yaml
+#
+# Watch logs with:
+#   kubectl logs -l job-name={{ .JobName }} -n {{ .Namespace }} --follow
+#
+# Clean up manually (or wait for ttlSecondsAfterFinished=600):
+#   kubectl delete job {{ .JobName }} -n {{ .Namespace }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .JobName }}
+  namespace: {{ .Namespace }}
+  labels:
+    app.kubernetes.io/name: cure
+    app.kubernetes.io/component: dns-tracer
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cure
+        app.kubernetes.io/component: dns-tracer
+        job-name: {{ .JobName }}
+    spec:
+      restartPolicy: Never
+{{- if .NodeSelector}}
+      nodeSelector:
+{{- range $k, $v := .NodeSelector}}
+        {{ $k }}: {{ $v }}
+{{- end}}
+{{- end}}
+{{- if .Tolerations}}
+      tolerations:
+{{- range .Tolerations}}
+        - key: "{{ .Key }}"
+          operator: {{ .Operator }}
+{{- if .Value}}
+          value: "{{ .Value }}"
+{{- end}}
+          effect: {{ .Effect }}
+{{- end}}
+{{- end}}
+      containers:
+        - name: cure-dns-tracer
+          image: {{ .Image }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          command:
+            - /bin/sh
+            - -c
+            - |
+              go install github.com/mrlm-net/cure/cmd/cure@{{ .Version }} && \
+              cure trace dns {{ .Hostname }} \
+                --count={{ .Count }} \
+                --interval={{ .Interval }} \
+                --timeout={{ .Timeout }}{{ if .Server }} \
+                --server={{ .Server }}{{ end }}
