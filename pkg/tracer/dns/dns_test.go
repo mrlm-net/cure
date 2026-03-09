@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/mrlm-net/cure/pkg/tracer/event"
 )
@@ -132,19 +133,18 @@ func TestTraceDNS_DryRun(t *testing.T) {
 	}
 }
 
-func TestWithCount_NormalisesToOne(t *testing.T) {
+func TestWithCount_ZeroRunsUntilContextCancelled(t *testing.T) {
 	em := &testEmitter{}
-	err := TraceDNS(context.Background(), "example.com",
+	// Dry-run iterations are instant; 10ms is enough for several loops.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_ = TraceDNS(ctx, "example.com",
 		WithEmitter(em),
 		WithDryRun(true),
-		WithCount(0), // should be normalised to 1
+		WithCount(0), // 0 = run indefinitely until ctx cancelled
 	)
-	if err != nil {
-		t.Fatalf("TraceDNS() error = %v", err)
-	}
-	// count=0 normalised to 1 → 2 events (1 start + 1 done)
-	if len(em.events) != 2 {
-		t.Errorf("got %d events, want 2 (count=0 should normalise to 1)", len(em.events))
+	if len(em.events) < 4 {
+		t.Errorf("got %d events, want at least 4 (count=0 should loop until cancelled)", len(em.events))
 	}
 }
 

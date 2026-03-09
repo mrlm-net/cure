@@ -106,10 +106,12 @@ func WithServer(addr string) Option {
 	}
 }
 
-// WithCount sets the number of times to repeat the DNS query. If n < 1 it is set to 1.
+// WithCount sets the number of times to repeat the DNS query.
+// n = 0 means run indefinitely until the context is cancelled (useful with WithInterval).
+// If n < 0 it is set to 1.
 func WithCount(n int) Option {
 	return func(cfg *traceConfig) {
-		if n < 1 {
+		if n < 0 {
 			n = 1
 		}
 		cfg.count = n
@@ -133,13 +135,17 @@ func buildResolver(server string) *net.Resolver {
 	}
 }
 
-// emitDryRunEvents emits count pairs of synthetic dns_query_start/dns_query_done events.
+// emitDryRunEvents emits synthetic dns_query_start/dns_query_done event pairs.
+// count = 0 loops until ctx is cancelled (mirrors the live-query behaviour).
 // Uses a hardcoded Azure Private Link scenario as the dry-run payload.
-func emitDryRunEvents(em event.Emitter, traceID string, count int) error {
+func emitDryRunEvents(ctx context.Context, em event.Emitter, traceID string, count int) error {
 	if em == nil {
 		return nil
 	}
-	for attempt := 1; attempt <= count; attempt++ {
+	for attempt := 1; count == 0 || attempt <= count; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		em.Emit(event.NewEvent("dns_query_start", traceID, map[string]any{
 			"hostname": "mystorageaccount.blob.core.windows.net",
 			"attempt":  attempt,
@@ -186,7 +192,7 @@ func TraceDNS(ctx context.Context, hostname string, opts ...Option) error {
 	traceID := generateTraceID()
 
 	if cfg.dryRun {
-		return emitDryRunEvents(cfg.emitter, traceID, cfg.count)
+		return emitDryRunEvents(ctx, cfg.emitter, traceID, cfg.count)
 	}
 
 	var resolver *net.Resolver
@@ -196,7 +202,7 @@ func TraceDNS(ctx context.Context, hostname string, opts ...Option) error {
 		resolver = net.DefaultResolver
 	}
 
-	for attempt := 1; attempt <= cfg.count; attempt++ {
+	for attempt := 1; cfg.count == 0 || attempt <= cfg.count; attempt++ {
 		// Wait between repeated queries (skip wait before first attempt).
 		if attempt > 1 && cfg.interval > 0 {
 			select {
