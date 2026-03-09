@@ -227,10 +227,10 @@ func TestDNSCommand_Run_InvalidCount(t *testing.T) {
 		Config: config.NewConfig(),
 	}
 	cmd := &DNSCommand{}
-	cmd.Flags().Parse([]string{"--count=0"})
+	cmd.Flags().Parse([]string{"--count=-1"})
 	err := cmd.Run(context.Background(), tc)
 	if err == nil {
-		t.Fatal("expected error for count=0, got nil")
+		t.Fatal("expected error for count=-1, got nil")
 	}
 }
 

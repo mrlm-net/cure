@@ -49,8 +49,8 @@ func (c *DNSCommand) Flags() *flag.FlagSet {
 	fs.BoolVar(&c.dryRun, "dry-run", false, "Emit events without I/O")
 	fs.IntVar(&c.timeout, "timeout", 0, "Query timeout in seconds (0 = use config default)")
 	fs.StringVar(&c.server, "server", "", "DNS resolver address (IP or IP:port, e.g. 168.63.129.16)")
-	fs.IntVar(&c.count, "count", 1, "Number of times to repeat the query")
-	fs.IntVar(&c.interval, "interval", 0, "Seconds to wait between repeated queries")
+	fs.IntVar(&c.count, "count", 1, "Number of times to repeat the query (0 = run until Ctrl+C)")
+	fs.IntVar(&c.interval, "interval", 0, "Seconds to wait between repeated queries (implies --count 0 when count is not set)")
 	return fs
 }
 
@@ -60,9 +60,14 @@ func (c *DNSCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	}
 	hostname := tc.Args[0]
 
-	// Validate --count
-	if c.count <= 0 {
-		return fmt.Errorf("--count must be greater than 0, got %d", c.count)
+	// Validate --count; negative values are rejected.
+	if c.count < 0 {
+		return fmt.Errorf("--count must be 0 (infinite) or greater, got %d", c.count)
+	}
+	// When --interval is set without an explicit --count, run indefinitely (like ping).
+	count := c.count
+	if c.interval > 0 && c.count == 1 {
+		count = 0
 	}
 
 	// Merge timeout with config
@@ -116,7 +121,7 @@ func (c *DNSCommand) Run(ctx context.Context, tc *terminal.Context) error {
 		dns.WithEmitter(em),
 		dns.WithDryRun(c.dryRun),
 		dns.WithTimeout(time.Duration(timeout) * time.Second),
-		dns.WithCount(c.count),
+		dns.WithCount(count),
 		dns.WithInterval(time.Duration(c.interval) * time.Second),
 	}
 	if server != "" {
