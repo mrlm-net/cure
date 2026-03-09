@@ -286,11 +286,12 @@ func (r *Router) runContextWith(ctx context.Context, args []string, stdout, stde
 	}
 
 	if fs := cmd.Flags(); fs != nil {
-		if err := fs.Parse(cmdArgs); err != nil {
+		positional, err := parseInterspersed(fs, cmdArgs)
+		if err != nil {
 			return &FlagParseError{Command: cmdName, Err: err}
 		}
 		execCtx.Flags = fs
-		execCtx.Args = fs.Args()
+		execCtx.Args = positional
 	} else {
 		execCtx.Args = cmdArgs
 	}
@@ -354,6 +355,33 @@ func (r *Router) suggestNames(name string) []string {
 // Returns the command and true if found, nil and false otherwise.
 func (r *Router) Lookup(name string) (Command, bool) {
 	return r.root.search(name)
+}
+
+// parseInterspersed parses flags from args using fs, collecting non-flag
+// arguments into a positional slice. Unlike flag.FlagSet.Parse, flags may
+// appear anywhere — before, after, or between positional arguments.
+//
+// The algorithm repeatedly calls fs.Parse; on each call the FlagSet stops at
+// the first non-flag token, which is then collected as a positional arg. The
+// slice of unprocessed tokens is passed back in, minus that leading positional,
+// until all tokens are consumed.
+func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
+	var positional []string
+	remaining := args
+	for len(remaining) > 0 {
+		if err := fs.Parse(remaining); err != nil {
+			return nil, err
+		}
+		rest := fs.Args()
+		if len(rest) == 0 {
+			break
+		}
+		// rest[0] is the first non-flag token (positional arg, or a value
+		// that appeared after "--"). Collect it and continue parsing the tail.
+		positional = append(positional, rest[0])
+		remaining = rest[1:]
+	}
+	return positional, nil
 }
 
 // Commands returns all registered commands, deduplicated by primary name.

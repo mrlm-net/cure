@@ -119,6 +119,113 @@ func TestRouter_RunPositionalArgs(t *testing.T) {
 	}
 }
 
+func TestRouter_InterspersedFlags(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantType string
+		wantArgs []string
+	}{
+		{
+			name:     "flags before positional",
+			args:     []string{"generate", "--type", "yaml", "output.yaml"},
+			wantType: "yaml",
+			wantArgs: []string{"output.yaml"},
+		},
+		{
+			name:     "positional before flags",
+			args:     []string{"generate", "output.yaml", "--type", "yaml"},
+			wantType: "yaml",
+			wantArgs: []string{"output.yaml"},
+		},
+		{
+			name:     "flags between positionals",
+			args:     []string{"generate", "a.yaml", "--type", "yaml", "b.yaml"},
+			wantType: "yaml",
+			wantArgs: []string{"a.yaml", "b.yaml"},
+		},
+		{
+			name:     "only flags no positional",
+			args:     []string{"generate", "--type", "html"},
+			wantType: "html",
+			wantArgs: []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotType string
+			var gotArgs []string
+			cmd := &flagArgsCommand{
+				flagCommand: flagCommand{
+					mockCommand: mockCommand{name: "generate"},
+					typeFlag:    &gotType,
+				},
+				capturedArgs: &gotArgs,
+			}
+			router := New(WithStdout(io.Discard), WithStderr(io.Discard))
+			router.Register(cmd)
+			if err := router.RunArgs(tt.args); err != nil {
+				t.Fatalf("RunArgs() error = %v", err)
+			}
+			if gotType != tt.wantType {
+				t.Errorf("type flag = %q, want %q", gotType, tt.wantType)
+			}
+			if len(gotArgs) != len(tt.wantArgs) {
+				t.Errorf("positional args = %v, want %v", gotArgs, tt.wantArgs)
+				return
+			}
+			for i := range gotArgs {
+				if gotArgs[i] != tt.wantArgs[i] {
+					t.Errorf("arg[%d] = %q, want %q", i, gotArgs[i], tt.wantArgs[i])
+				}
+			}
+		})
+	}
+}
+
+func TestParseInterspersed(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		wantCount    int
+		wantInterval int
+		wantPos      []string
+	}{
+		{"flags before hostname", []string{"--count", "60", "--interval", "10", "host.example.com"}, 60, 10, []string{"host.example.com"}},
+		{"hostname before flags", []string{"host.example.com", "--count", "60", "--interval", "10"}, 60, 10, []string{"host.example.com"}},
+		{"interleaved", []string{"h1", "--count", "3", "h2", "--interval", "5"}, 3, 5, []string{"h1", "h2"}},
+		{"only flags", []string{"--count", "2", "--interval", "1"}, 2, 1, []string{}},
+		{"only positional", []string{"host.example.com"}, 1, 0, []string{"host.example.com"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var count, interval int
+			fs := flag.NewFlagSet("test", flag.ContinueOnError)
+			fs.IntVar(&count, "count", 1, "")
+			fs.IntVar(&interval, "interval", 0, "")
+			positional, err := parseInterspersed(fs, tt.args)
+			if err != nil {
+				t.Fatalf("parseInterspersed() error = %v", err)
+			}
+			if count != tt.wantCount {
+				t.Errorf("count = %d, want %d", count, tt.wantCount)
+			}
+			if interval != tt.wantInterval {
+				t.Errorf("interval = %d, want %d", interval, tt.wantInterval)
+			}
+			if len(positional) != len(tt.wantPos) {
+				t.Errorf("positional = %v, want %v", positional, tt.wantPos)
+				return
+			}
+			for i := range positional {
+				if positional[i] != tt.wantPos[i] {
+					t.Errorf("positional[%d] = %q, want %q", i, positional[i], tt.wantPos[i])
+				}
+			}
+		})
+	}
+}
+
 func TestRouter_RunContext_Cancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -219,6 +326,18 @@ type argsCapture struct {
 func (c *argsCapture) Run(_ context.Context, tc *Context) error {
 	c.called = true
 	*c.captured = tc.Args
+	return nil
+}
+
+// flagArgsCommand combines flag parsing with positional arg capture.
+type flagArgsCommand struct {
+	flagCommand
+	capturedArgs *[]string
+}
+
+func (c *flagArgsCommand) Run(_ context.Context, tc *Context) error {
+	c.called = true
+	*c.capturedArgs = tc.Args
 	return nil
 }
 
