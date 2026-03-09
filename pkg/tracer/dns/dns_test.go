@@ -3,6 +3,8 @@ package dns
 import (
 	"context"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,6 +16,64 @@ type testEmitter struct{ events []event.Event }
 
 func (e *testEmitter) Emit(ev event.Event) error { e.events = append(e.events, ev); return nil }
 func (e *testEmitter) Close() error              { return nil }
+
+func TestReadSystemNameservers(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{
+			name:    "single nameserver",
+			content: "nameserver 1.1.1.1\n",
+			want:    []string{"1.1.1.1:53"},
+		},
+		{
+			name:    "multiple nameservers",
+			content: "nameserver 8.8.8.8\nnameserver 8.8.4.4\n",
+			want:    []string{"8.8.8.8:53", "8.8.4.4:53"},
+		},
+		{
+			name:    "comments and search lines ignored",
+			content: "# DNS config\nsearch example.com\nnameserver 10.0.0.10\noptions ndots:5\n",
+			want:    []string{"10.0.0.10:53"},
+		},
+		{
+			name:    "invalid IP skipped",
+			content: "nameserver not-an-ip\nnameserver 1.2.3.4\n",
+			want:    []string{"1.2.3.4:53"},
+		},
+		{
+			name:    "empty file",
+			content: "",
+			want:    nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := filepath.Join(t.TempDir(), "resolv.conf")
+			if err := os.WriteFile(f, []byte(tt.content), 0600); err != nil {
+				t.Fatal(err)
+			}
+			got := readSystemNameservers(f)
+			if len(got) != len(tt.want) {
+				t.Fatalf("readSystemNameservers() = %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestReadSystemNameservers_MissingFile(t *testing.T) {
+	got := readSystemNameservers(filepath.Join(t.TempDir(), "nonexistent"))
+	if got != nil {
+		t.Errorf("expected nil for missing file, got %v", got)
+	}
+}
 
 func TestIsPrivate(t *testing.T) {
 	initOnce.Do(initPrivateRanges)

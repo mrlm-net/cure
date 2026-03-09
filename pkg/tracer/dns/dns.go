@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -135,6 +137,24 @@ func buildResolver(server string) *net.Resolver {
 	}
 }
 
+// readSystemNameservers parses path (typically /etc/resolv.conf) and returns
+// the nameserver addresses in "IP:53" form. Returns nil when the file is
+// missing, unreadable, or contains no valid nameserver entries.
+func readSystemNameservers(path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var servers []string
+	for _, line := range strings.Split(string(data), "\n") {
+		f := strings.Fields(strings.TrimSpace(line))
+		if len(f) >= 2 && f[0] == "nameserver" && net.ParseIP(f[1]) != nil {
+			servers = append(servers, net.JoinHostPort(f[1], "53"))
+		}
+	}
+	return servers
+}
+
 // emitDryRunEvents emits synthetic dns_query_start/dns_query_done event pairs.
 // count = 0 loops until ctx is cancelled (mirrors the live-query behaviour).
 // Uses a hardcoded Azure Private Link scenario as the dry-run payload.
@@ -196,10 +216,14 @@ func TraceDNS(ctx context.Context, hostname string, opts ...Option) error {
 	}
 
 	var resolver *net.Resolver
+	// Detect system nameservers once before the loop so we can include them
+	// in every event when no explicit server was configured.
+	var nameservers []string
 	if cfg.server != "" {
 		resolver = buildResolver(cfg.server)
 	} else {
 		resolver = net.DefaultResolver
+		nameservers = readSystemNameservers("/etc/resolv.conf")
 	}
 
 	for attempt := 1; cfg.count == 0 || attempt <= cfg.count; attempt++ {
@@ -221,6 +245,8 @@ func TraceDNS(ctx context.Context, hostname string, opts ...Option) error {
 		}
 		if cfg.server != "" {
 			startData["server"] = cfg.server
+		} else if len(nameservers) > 0 {
+			startData["nameservers"] = nameservers
 		}
 		if cfg.emitter != nil {
 			cfg.emitter.Emit(event.NewEvent("dns_query_start", traceID, startData))
@@ -242,6 +268,8 @@ func TraceDNS(ctx context.Context, hostname string, opts ...Option) error {
 		}
 		if cfg.server != "" {
 			doneData["server"] = cfg.server
+		} else if len(nameservers) > 0 {
+			doneData["nameservers"] = nameservers
 		}
 
 		if ipErr != nil {
