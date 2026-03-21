@@ -53,8 +53,8 @@ func TestNew_Defaults(t *testing.T) {
 	if srv.version != "0.0.0" {
 		t.Errorf("version = %q, want %q", srv.version, "0.0.0")
 	}
-	if srv.addr != ":8080" {
-		t.Errorf("addr = %q, want %q", srv.addr, ":8080")
+	if srv.addr != "127.0.0.1:8080" {
+		t.Errorf("addr = %q, want %q", srv.addr, "127.0.0.1:8080")
 	}
 	if srv.sessionTimeout != 30*time.Minute {
 		t.Errorf("sessionTimeout = %v, want %v", srv.sessionTimeout, 30*time.Minute)

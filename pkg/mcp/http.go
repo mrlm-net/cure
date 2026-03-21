@@ -76,11 +76,33 @@ func (ss *sessionStore) delete(id string) {
 	}
 }
 
+// evictExpired removes sessions from the store whose last-seen time is older
+// than timeout. It acquires the store's write lock for the full sweep.
+func evictExpired(store *sessionStore, timeout time.Duration) {
+	now := time.Now()
+	store.mu.Lock()
+	var expired []string
+	for id, sess := range store.sessions {
+		sess.mu.Lock()
+		if now.Sub(sess.lastSeen) > timeout {
+			expired = append(expired, id)
+		}
+		sess.mu.Unlock()
+	}
+	for _, id := range expired {
+		sess := store.sessions[id]
+		delete(store.sessions, id)
+		close(sess.events)
+	}
+	store.mu.Unlock()
+}
+
 // ServeHTTP starts the MCP server in HTTP Streamable transport mode.
 // All MCP traffic is served on the /mcp endpoint.
 //
 // addr overrides the address set by [WithAddr]; pass "" to use the configured
 // address. ServeHTTP blocks until ctx is cancelled or a fatal error occurs.
+// Idle sessions are purged every half sessionTimeout interval.
 func (s *Server) ServeHTTP(ctx context.Context, addr string) error {
 	if addr == "" {
 		addr = s.addr
@@ -94,6 +116,15 @@ func (s *Server) ServeHTTP(ctx context.Context, addr string) error {
 		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
+		// ReadTimeout covers the full request body read (safe for POST payloads).
+		ReadTimeout: 30 * time.Second,
+		// WriteTimeout is intentionally 0 (disabled) at the server level because SSE
+		// GET connections are long-lived; individual write deadlines can be set via
+		// http.ResponseController on non-streaming handlers if needed.
+		WriteTimeout: 0,
+		// IdleTimeout closes keep-alive connections that have been idle for too long,
+		// preventing resource exhaustion from abandoned clients.
+		IdleTimeout: 120 * time.Second,
 	}
 
 	// Shutdown when the context is cancelled.
@@ -102,6 +133,20 @@ func (s *Server) ServeHTTP(ctx context.Context, addr string) error {
 		shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutCtx)
+	}()
+
+	// Periodically evict idle sessions.
+	go func() {
+		ticker := time.NewTicker(s.sessionTimeout / 2)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				evictExpired(store, s.sessionTimeout)
+			}
+		}
 	}()
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -133,16 +178,23 @@ func (s *Server) mcpHandler(store *sessionStore) http.HandlerFunc {
 
 // checkOrigin validates the request Origin header against the allowedOrigins list.
 // Returns true when:
-//   - allowedOrigins is empty (allow all), or
-//   - the request has no Origin header (non-browser / same-origin), or
+//   - allowedOrigins is empty (allow all — development default), or
+//   - the request has no Origin header (non-browser / server-to-server), or
 //   - the Origin matches one of the allowed values (case-insensitive).
+//
+// The literal string "null" is explicitly rejected when allowedOrigins is non-empty.
+// Browsers send "null" as the Origin for file:// and sandboxed iframe requests;
+// allowing it would bypass allowlist enforcement.
 func (s *Server) checkOrigin(r *http.Request) bool {
 	if len(s.allowedOrigins) == 0 {
-		return true
+		return true // development default — all origins allowed
 	}
 	origin := r.Header.Get("Origin")
 	if origin == "" {
-		return true
+		return true // non-browser / server-to-server — allow
+	}
+	if origin == "null" {
+		return false // browser null-origin (file://, sandboxed iframe) — reject
 	}
 	for _, allowed := range s.allowedOrigins {
 		if strings.EqualFold(allowed, origin) {
@@ -257,12 +309,15 @@ func (s *Server) handleHTTPGet(store *sessionStore, w http.ResponseWriter, r *ht
 	}
 }
 
-// handleHTTPDelete terminates an existing session.
+// handleHTTPDelete terminates an existing session. The Mcp-Session-Id header
+// is required; requests without it receive 400 Bad Request.
 func (s *Server) handleHTTPDelete(store *sessionStore, w http.ResponseWriter, r *http.Request) {
 	id := r.Header.Get("Mcp-Session-Id")
-	if id != "" {
-		store.delete(id)
+	if id == "" {
+		http.Error(w, "missing Mcp-Session-Id header", http.StatusBadRequest)
+		return
 	}
+	store.delete(id)
 	w.WriteHeader(http.StatusOK)
 }
 

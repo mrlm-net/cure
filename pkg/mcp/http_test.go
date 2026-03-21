@@ -185,9 +185,9 @@ func TestHTTPHandler_Delete_NoSessionID(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	// DELETE with no session ID is a no-op and must not panic.
-	if rr.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	// DELETE without a session ID must return 400 Bad Request.
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d (BadRequest, missing session ID)", rr.Code, http.StatusBadRequest)
 	}
 }
 
@@ -274,6 +274,17 @@ func TestCheckOrigin(t *testing.T) {
 			allowedOrigins: []string{"https://a.com", "https://b.com"},
 			origin:         "https://b.com",
 			wantAllowed:    true,
+		},
+		{
+			name:           "null origin with allowlist — rejected (file:// / sandboxed iframe)",
+			allowedOrigins: []string{"https://example.com"},
+			origin:         "null",
+			wantAllowed:    false,
+		},
+		{
+			name:        "null origin with empty allowlist — allowed (no restrictions)",
+			origin:      "null",
+			wantAllowed: true,
 		},
 	}
 

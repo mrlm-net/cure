@@ -88,17 +88,25 @@ func WithStderr(w io.Writer) Option {
 }
 
 // WithAddr sets the TCP address for HTTP Streamable transport.
+// The default ("127.0.0.1:8080") binds the loopback interface only, which is
+// the safe default for local development tools. To expose the server on all
+// interfaces (e.g. in a container), pass ":8080" or "0.0.0.0:8080" explicitly.
 //
-// Default: ":8080"
+// Default: "127.0.0.1:8080"
 func WithAddr(addr string) Option {
 	return func(s *Server) {
 		s.addr = addr
 	}
 }
 
-// WithAllowedOrigins sets the list of permitted CORS origins for HTTP transport.
-// When non-empty, requests with an Origin header not in the list are rejected.
-// Non-browser requests (no Origin header) are always allowed.
+// WithAllowedOrigins restricts CORS Origin header values for the HTTP transport.
+// An empty slice (the default) allows all origins — safe for local development
+// but not for production deployments accessible over a network.
+// Provide explicit allowed origins in production to prevent DNS rebinding attacks.
+//
+// When a non-empty list is provided, the literal "null" origin (sent by browsers
+// for file:// and sandboxed iframe requests) is always rejected. Requests without
+// an Origin header (non-browser / server-to-server) are always allowed.
 //
 // Default: nil (allow all origins)
 func WithAllowedOrigins(origins ...string) Option {
@@ -133,7 +141,9 @@ func WithLogger(l *slog.Logger) Option {
 //   - name: "mcp-server"
 //   - version: "0.0.0"
 //   - stdin/stdout/stderr: os.Stdin/os.Stdout/os.Stderr
-//   - addr: ":8080"
+//   - addr: "127.0.0.1:8080" (loopback-only — safe default for local tools)
+//   - allowedOrigins: nil (all origins allowed — suitable for development/local use;
+//     provide explicit origins in production to prevent DNS rebinding attacks)
 //   - sessionTimeout: 30 minutes
 func New(opts ...Option) *Server {
 	s := &Server{
@@ -145,7 +155,7 @@ func New(opts ...Option) *Server {
 		stdin:          os.Stdin,
 		stdout:         os.Stdout,
 		stderr:         os.Stderr,
-		addr:           ":8080",
+		addr:           "127.0.0.1:8080",
 		sessionTimeout: 30 * time.Minute,
 	}
 	for _, opt := range opts {
