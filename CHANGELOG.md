@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pkg/mcp` — stdlib-only MCP (Model Context Protocol) server abstraction targeting protocol version `2025-03-26`
+- `pkg/mcp`: `Tool`, `Resource`, and `Prompt` interfaces mirroring the `pkg/terminal.Command` pattern
+- `pkg/mcp`: `Server` with functional options (`WithName`, `WithVersion`, `WithAddr`, `WithAllowedOrigins`); `RegisterTool`, `RegisterResource`, `RegisterPrompt` preserve registration order
+- `pkg/mcp`: `FuncTool()` adapter for registering anonymous functions as MCP tools
+- `pkg/mcp`: `Schema()` fluent builder — `.String()`, `.Number()`, `.Integer()`, `.Bool()`, `Required()`, `WithEnum()`, `WithDefault()`
+- `pkg/mcp`: `Text()` and `Textf()` content constructors for tool call responses
+- `pkg/mcp`: `ServeStdio(ctx)` — stdio transport for Claude Code and local MCP client integration
+- `pkg/mcp`: `ServeHTTP(ctx, addr)` — HTTP Streamable transport with SSE, per-session management, and Origin validation; default bind `127.0.0.1:8080` (loopback only)
+- `pkg/mcp`: `Serve(ctx)` — auto-detects transport based on stdin pipe state; `IsStdinPipe()` is exported for testing
+- `pkg/mcp`: HTTP timeouts (ReadHeader 10s, Read 30s, Idle 120s); session IDs generated with 128-bit `crypto/rand`; `"null"` Origin explicitly rejected when an allowlist is set
 - `pkg/tracer/dns` — DNS resolution tracer library with `TraceDNS(ctx, hostname, ...Option)` API; functional options `WithEmitter`, `WithDryRun`, `WithTimeout`, `WithServer`, `WithCount`, `WithInterval`
 - `pkg/tracer/dns`: emits `dns_query_start` and `dns_query_done` events with resolved IP addresses, CNAME chain, resolution duration, optional error, and RFC 1918 private IP classification per address
 - `cmd/cure`: `trace dns <hostname>` subcommand with `--format` (json|html), `--out-file`, `--dry-run`, `--timeout`, `--server` (IP or IP:port), `--count`, and `--interval` flags
