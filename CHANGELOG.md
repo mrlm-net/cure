@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-03-21
+
 ### Added
 
 - `pkg/mcp` — stdlib-only MCP (Model Context Protocol) server abstraction targeting protocol version `2025-03-26`
