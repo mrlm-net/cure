@@ -94,9 +94,129 @@ Cure is built on three core principles: **zero external dependencies**, **reusab
 
 **Zero dependencies** — cure uses only Go's standard library. This eliminates supply chain risk, reduces build times, simplifies audits, and ensures cure remains buildable and maintainable for years without dependency updates. The tradeoff is implementing more functionality from scratch, but the benefits outweigh the cost for a foundational tool.
 
-**Reusable packages** — the `pkg/` directory contains independently useful libraries that any Go project can import: `pkg/terminal` for CLI routing and flag parsing, `pkg/config` for hierarchical configuration merging, `pkg/tracer` for network event tracing, `pkg/template` for embedded template rendering, and `pkg/mcp` for building stdlib-only MCP (Model Context Protocol) servers with stdio and HTTP Streamable transports. Each package follows a single responsibility and can be used without importing cure's application logic.
+**Reusable packages** — the `pkg/` directory contains independently useful libraries that any Go project can import: `pkg/terminal` for CLI routing and flag parsing, `pkg/config` for hierarchical configuration merging, `pkg/tracer` for network event tracing, `pkg/template` for embedded template rendering, `pkg/mcp` for building stdlib-only MCP (Model Context Protocol) servers with stdio and HTTP Streamable transports, and `pkg/agent` for provider-agnostic AI agent context management. Each package follows a single responsibility and can be used without importing cure's application logic.
 
 **Minimal abstraction** — cure favors composition over complex abstractions. Commands implement a simple interface (`Name()`, `Description()`, `Usage()`, `Flags()`, `Run()`), configuration is plain `map[string]interface{}` with dot-notation access, and the router dispatches commands without heavy middleware stacks. This keeps the codebase readable and debuggable.
+
+## pkg/agent
+
+`pkg/agent` provides a provider-agnostic abstraction for AI agent context management. It defines the core interfaces, session lifecycle, a global provider registry, and a persistence interface — without coupling to any specific AI provider.
+
+Import path: `github.com/mrlm-net/cure/pkg/agent`
+
+### Registering a provider
+
+Provider adapters live in `internal/agent/<provider>/` and self-register via `init()` using the blank-import driver pattern — the same convention as `database/sql` drivers.
+
+```go
+import (
+    "github.com/mrlm-net/cure/pkg/agent"
+
+    // Register the "claude" provider by importing its adapter package.
+    // The adapter calls agent.Register("claude", factory) in its init() function.
+    _ "github.com/mrlm-net/cure/internal/agent/claude"
+)
+```
+
+After the blank import, `agent.New("claude", cfg)` is available. `agent.Registered()` returns a sorted list of all registered provider names.
+
+### Creating a session
+
+`Session` holds the full conversation state. `NewSession` generates a 128-bit cryptographically random ID.
+
+```go
+session := agent.NewSession("claude", "claude-opus-4-5")
+session.SystemPrompt = "You are a helpful assistant."
+session.AppendUserMessage("Summarise the Go 1.23 release notes.")
+```
+
+Fork a session to branch a conversation without mutating the original:
+
+```go
+branch := session.Fork()
+// branch.ForkOf == session.ID
+// branch.History is a deep copy — appending to branch does not affect session
+```
+
+### Streaming a response
+
+`Agent.Run` returns `iter.Seq2[Event, error]`, which is iterated with Go 1.23's range-over-function syntax.
+
+```go
+a, err := agent.New("claude", map[string]any{
+    "api_key": os.Getenv("ANTHROPIC_API_KEY"),
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+var response strings.Builder
+
+for ev, err := range a.Run(ctx, session) {
+    if err != nil {
+        log.Fatal(err)
+    }
+    switch ev.Kind {
+    case agent.EventKindToken:
+        response.WriteString(ev.Text)
+    case agent.EventKindDone:
+        fmt.Printf("tokens: in=%d out=%d stop=%s\n",
+            ev.InputTokens, ev.OutputTokens, ev.StopReason)
+    case agent.EventKindError:
+        log.Fatalf("provider error: %s", ev.Err)
+    }
+}
+
+session.AppendAssistantMessage(response.String())
+```
+
+Cancelling the context terminates the stream early.
+
+### Persisting sessions
+
+`SessionStore` is the interface for concrete persistence implementations (JSON file, database, in-memory). Implementations must be safe for concurrent use.
+
+```go
+type SessionStore interface {
+    Save(ctx context.Context, s *Session) error
+    Load(ctx context.Context, id string) (*Session, error)
+    List(ctx context.Context) ([]*Session, error)
+    Delete(ctx context.Context, id string) error
+    Fork(ctx context.Context, id string) (*Session, error)
+}
+```
+
+`Load`, `Delete`, and `Fork` return `ErrSessionNotFound` (or a wrapped form) when the session ID does not exist. Check with `errors.Is`:
+
+```go
+_, err := store.Load(ctx, id)
+if errors.Is(err, agent.ErrSessionNotFound) {
+    // session does not exist
+}
+```
+
+### Testing a custom store
+
+Use the shared test suite to verify any `SessionStore` implementation:
+
+```go
+func TestMyStore(t *testing.T) {
+    store := NewMyStore(t.TempDir())
+    agent.RunSessionStoreTests(t, store)
+}
+```
+
+`RunSessionStoreTests` covers save/load round-trips, not-found errors, list, delete, and fork semantics.
+
+### Token estimation
+
+For quick context window budget calculations before calling a provider:
+
+```go
+n := agent.EstimateTokens(text) // len(text) / 4
+```
+
+For precise counts, use `Agent.CountTokens`. If the provider does not support it, `ErrCountNotSupported` is returned.
 
 ## Development
 

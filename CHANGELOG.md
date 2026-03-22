@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `pkg/agent` — provider-agnostic AI agent abstraction with core interfaces, session management, and a global registry
+- `pkg/agent`: `Agent` interface with `Run(ctx, session) iter.Seq2[Event, error]`, `CountTokens(ctx, session) (int, error)`, and `Provider() string`
+- `pkg/agent`: `AgentFactory` constructor type — `func(cfg map[string]any) (Agent, error)`
+- `pkg/agent`: `EventKind` constants (`token`, `start`, `done`, `error`) and `Event` struct with JSON serialisation
+- `pkg/agent`: `Role` constants (`user`, `assistant`, `system`) and `Message` struct
+- `pkg/agent`: global registry — `Register(name, factory)` panics on empty/duplicate names (matches `http.Handle` semantics); `New(name, cfg)` wraps `ErrProviderNotFound`; `Registered()` returns sorted provider names
+- `pkg/agent`: provider adapters live in `internal/agent/<provider>/` and self-register via `init()` using the blank-import driver pattern (same as `database/sql`)
+- `pkg/agent`: `Session` struct with `ID`, `Provider`, `Model`, `SystemPrompt`, `History`, `CreatedAt`, `UpdatedAt`, `ForkOf`, `Tags`
+- `pkg/agent`: `NewSession(provider, model)` — 128-bit `crypto/rand` session ID; `Fork()` — deep copy with new ID and `ForkOf` tracking; `AppendUserMessage` / `AppendAssistantMessage`
+- `pkg/agent`: `SessionStore` interface — `Save`, `Load`, `List`, `Delete`, `Fork` — for concrete persistence implementations
+- `pkg/agent`: `RunSessionStoreTests(t, store)` — shared test suite callable from any concrete store's test file
+- `pkg/agent`: sentinel errors `ErrProviderNotFound`, `ErrSessionNotFound`, `ErrCountNotSupported`
+- `pkg/agent`: `EstimateTokens(text)` — len/4 token heuristic for context window budget calculations
+
 ## [0.4.1] - 2026-03-21
 
 ### Added
@@ -71,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cmd/cure/main.go` — thin entry point wiring the terminal router
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
-[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.4.1...HEAD
 [0.3.0]: https://github.com/mrlm-net/cure/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mrlm-net/cure/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mrlm-net/cure/releases/tag/v0.1.0
