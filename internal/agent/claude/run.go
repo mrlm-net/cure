@@ -16,6 +16,10 @@ type result struct {
 
 // Run streams a response for the given session as an iter.Seq2[Event, error].
 // The caller iterates events with: for ev, err := range a.Run(ctx, session) { ... }
+// If the caller breaks out of the range loop before the stream completes, it
+// MUST cancel ctx to allow the background streaming goroutine to terminate
+// cleanly. Failing to do so will leak the goroutine until the stream ends
+// naturally or the process exits.
 func (a *claudeAdapter) Run(ctx context.Context, sess *agent.Session) iter.Seq2[agent.Event, error] {
 	return func(yield func(agent.Event, error) bool) {
 		ch := make(chan result)
