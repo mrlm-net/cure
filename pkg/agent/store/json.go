@@ -15,6 +15,9 @@ import (
 	"github.com/mrlm-net/cure/pkg/agent"
 )
 
+// Compile-time assertion that JSONStore implements agent.SessionStore.
+var _ agent.SessionStore = (*JSONStore)(nil)
+
 // JSONStore is a file-backed SessionStore that persists each session as a JSON
 // file under a configurable directory. Writes are atomic via os.CreateTemp +
 // os.Rename. JSONStore is safe for concurrent use.
@@ -48,6 +51,8 @@ func validateID(id string) error {
 		return fmt.Errorf("store: invalid session ID: empty string")
 	case strings.ContainsRune(id, '/'):
 		return fmt.Errorf("store: invalid session ID %q: contains '/'", id)
+	case strings.ContainsRune(id, '\\'):
+		return fmt.Errorf("store: invalid session ID %q: contains '\\'", id)
 	case strings.ContainsRune(id, 0):
 		return fmt.Errorf("store: invalid session ID %q: contains null byte", id)
 	}
@@ -63,6 +68,9 @@ func (s *JSONStore) sessionPath(id string) string {
 // The store directory is created with mode 0700 if it does not exist.
 // Save is safe for concurrent use.
 func (s *JSONStore) Save(_ context.Context, sess *agent.Session) error {
+	if sess == nil {
+		return fmt.Errorf("store: session must not be nil")
+	}
 	if err := validateID(sess.ID); err != nil {
 		return err
 	}

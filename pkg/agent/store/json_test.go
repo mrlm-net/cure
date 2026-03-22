@@ -118,6 +118,7 @@ func TestJSONStore_IDValidation(t *testing.T) {
 	}{
 		{"empty", ""},
 		{"slash", "bad/id"},
+		{"backslash", "bad\\id"},
 		{"null byte", "bad\x00id"},
 	}
 
@@ -148,30 +149,17 @@ func TestJSONStore_IDValidation(t *testing.T) {
 
 // TestJSONStore_FilePermissions verifies session files are created with 0600.
 func TestJSONStore_FilePermissions(t *testing.T) {
-	s := newStore(t)
+	dir := t.TempDir()
+	s, err := store.NewJSONStore(dir)
+	if err != nil {
+		t.Fatalf("NewJSONStore: %v", err)
+	}
 	ctx := context.Background()
 	sess := agent.NewSession("claude", "claude-opus-4-6")
 	if err := s.Save(ctx, sess); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-
-	// Construct the expected path manually for stat.
-	dir := t.TempDir() // Note: we need the actual store dir; use a helper approach
-	// Use List to find the file, then stat via the store dir.
-	// Since we can't easily get the store's dir from outside, we'll rely on
-	// the fact that the test's TempDir is the store dir.
-	// Instead, save and re-derive the path from the session ID.
-	// We'll create a store with a known dir for this test.
-	knownDir := t.TempDir()
-	s2, err := store.NewJSONStore(knownDir)
-	if err != nil {
-		t.Fatalf("NewJSONStore: %v", err)
-	}
-	sess2 := agent.NewSession("claude", "claude-opus-4-6")
-	if err := s2.Save(ctx, sess2); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-	path := filepath.Join(knownDir, sess2.ID+".json")
+	path := filepath.Join(dir, sess.ID+".json")
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
@@ -179,8 +167,6 @@ func TestJSONStore_FilePermissions(t *testing.T) {
 	if perm := info.Mode().Perm(); perm != 0600 {
 		t.Errorf("file permission = %04o, want 0600", perm)
 	}
-	_ = dir
-	_ = s
 }
 
 // TestJSONStore_DirPermissions verifies the store directory is created with 0700.
