@@ -21,6 +21,7 @@ type Session struct {
 }
 
 // NewSession creates a new Session for the given provider and model.
+// Panics if the operating system's cryptographic random source is unavailable.
 func NewSession(provider, model string) *Session {
 	now := time.Now().UTC()
 	return &Session{
@@ -35,6 +36,7 @@ func NewSession(provider, model string) *Session {
 
 // Fork returns a deep copy of the session with a new ID and ForkOf set to the
 // original session's ID. The forked session shares no mutable state with the original.
+// Panics if the operating system's cryptographic random source is unavailable.
 func (s *Session) Fork() *Session {
 	now := time.Now().UTC()
 	history := make([]Message, len(s.History))

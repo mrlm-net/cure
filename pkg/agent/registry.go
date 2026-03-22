@@ -50,9 +50,3 @@ func Registered() []string {
 	return names
 }
 
-// resetRegistry clears the registry. For use in tests only.
-func resetRegistry() {
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	registry = make(map[string]AgentFactory)
-}

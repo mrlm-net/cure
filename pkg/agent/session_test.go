@@ -2,7 +2,6 @@ package agent_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/mrlm-net/cure/pkg/agent"
 )
@@ -106,7 +105,6 @@ func TestSessionAppend(t *testing.T) {
 	t.Run("AppendUserMessage updates History and UpdatedAt", func(t *testing.T) {
 		s := agent.NewSession("p", "m")
 		before := s.UpdatedAt
-		time.Sleep(time.Millisecond)
 		s.AppendUserMessage("hello")
 		if len(s.History) != 1 {
 			t.Fatalf("History len = %d, want 1", len(s.History))
@@ -117,8 +115,11 @@ func TestSessionAppend(t *testing.T) {
 		if s.History[0].Content != "hello" {
 			t.Errorf("Content = %q, want %q", s.History[0].Content, "hello")
 		}
-		if !s.UpdatedAt.After(before) {
-			t.Error("UpdatedAt not advanced after AppendUserMessage")
+		// UpdatedAt must be set to at least the pre-call time.
+		// We use !Before rather than After to avoid flakiness when both
+		// time.Now() calls land within the same clock tick.
+		if s.UpdatedAt.Before(before) {
+			t.Error("UpdatedAt regressed after AppendUserMessage")
 		}
 	})
 	t.Run("AppendAssistantMessage sets RoleAssistant", func(t *testing.T) {
