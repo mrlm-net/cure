@@ -2,6 +2,7 @@ package ctxcmd
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 
@@ -60,6 +61,9 @@ func (c *ResumeCommand) Run(ctx context.Context, tc *terminal.Context) error {
 
 	sess, err := c.store.Load(ctx, sessionID)
 	if err != nil {
+		if errors.Is(err, agent.ErrSessionNotFound) {
+			return fmt.Errorf("context resume: session %q not found", sessionID)
+		}
 		return fmt.Errorf("context resume: %w", err)
 	}
 

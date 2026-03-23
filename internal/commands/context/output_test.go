@@ -11,23 +11,6 @@ import (
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
-func TestStdinReader_WithInjected(t *testing.T) {
-	r := strings.NewReader("injected")
-	tc := &terminal.Context{Stdin: r}
-	got := stdinReader(tc)
-	if got != r {
-		t.Error("stdinReader should return tc.Stdin when it is non-nil")
-	}
-}
-
-func TestStdinReader_NilUsesOSStdin(t *testing.T) {
-	tc := &terminal.Context{}
-	got := stdinReader(tc)
-	if got == nil {
-		t.Error("stdinReader should return os.Stdin when tc.Stdin is nil")
-	}
-}
-
 func makeTokenEvents(tokens ...string) []agent.Event {
 	evs := []agent.Event{{Kind: agent.EventKindStart}}
 	for _, tok := range tokens {
@@ -47,99 +30,152 @@ func seqFromEvents(events []agent.Event) func(yield func(agent.Event, error) boo
 	}
 }
 
-func TestStreamText_WritesTokensInOrder(t *testing.T) {
-	var buf bytes.Buffer
-	ctx := context.Background()
-	events := makeTokenEvents("Hello", ", ", "world")
-
-	text, err := streamText(ctx, &buf, seqFromEvents(events))
-	if err != nil {
-		t.Fatalf("streamText error: %v", err)
+func TestStdinReader(t *testing.T) {
+	tests := []struct {
+		name     string
+		injected *strings.Reader
+		wantNil  bool
+	}{
+		{
+			name:     "returns injected reader when tc.Stdin is set",
+			injected: strings.NewReader("injected"),
+		},
+		{
+			name: "returns os.Stdin when tc.Stdin is nil",
+		},
 	}
-	if !strings.HasPrefix(buf.String(), "Hello, world") {
-		t.Errorf("expected output to contain tokens in order, got %q", buf.String())
-	}
-	if text != "Hello, world" {
-		t.Errorf("returned text = %q, want %q", text, "Hello, world")
-	}
-}
-
-func TestStreamText_EmptyTokens(t *testing.T) {
-	var buf bytes.Buffer
-	ctx := context.Background()
-	events := []agent.Event{{Kind: agent.EventKindStart}, {Kind: agent.EventKindDone}}
-
-	text, err := streamText(ctx, &buf, seqFromEvents(events))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if text != "" {
-		t.Errorf("expected empty text, got %q", text)
-	}
-}
-
-func TestStreamNDJSON_EmitsValidJSONPerEvent(t *testing.T) {
-	var buf bytes.Buffer
-	ctx := context.Background()
-	events := makeTokenEvents("tok1", "tok2")
-
-	_, err := streamNDJSON(ctx, &buf, seqFromEvents(events))
-	if err != nil {
-		t.Fatalf("streamNDJSON error: %v", err)
-	}
-
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) == 0 {
-		t.Fatal("expected at least one NDJSON line")
-	}
-	for i, line := range lines {
-		var ev agent.Event
-		if err := json.Unmarshal([]byte(line), &ev); err != nil {
-			t.Errorf("line %d is not valid JSON: %v — %q", i, err, line)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tc := &terminal.Context{}
+			if tt.injected != nil {
+				tc.Stdin = tt.injected
+			}
+			got := stdinReader(tc)
+			if got == nil {
+				t.Fatal("stdinReader returned nil")
+			}
+			if tt.injected != nil && got != tt.injected {
+				t.Error("stdinReader should return tc.Stdin when set")
+			}
+		})
 	}
 }
 
-func TestStreamNDJSON_AccumulatesText(t *testing.T) {
-	var buf bytes.Buffer
-	ctx := context.Background()
-	events := makeTokenEvents("foo", "bar")
-
-	text, err := streamNDJSON(ctx, &buf, seqFromEvents(events))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestStreamText(t *testing.T) {
+	tests := []struct {
+		name       string
+		events     []agent.Event
+		wantText   string
+		wantOutput string
+	}{
+		{
+			name:       "writes tokens in order",
+			events:     makeTokenEvents("Hello", ", ", "world"),
+			wantText:   "Hello, world",
+			wantOutput: "Hello, world",
+		},
+		{
+			name:     "empty token list produces empty text",
+			events:   []agent.Event{{Kind: agent.EventKindStart}, {Kind: agent.EventKindDone}},
+			wantText: "",
+		},
 	}
-	if text != "foobar" {
-		t.Errorf("accumulated text = %q, want %q", text, "foobar")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			text, err := streamText(context.Background(), &buf, seqFromEvents(tt.events))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if text != tt.wantText {
+				t.Errorf("text = %q, want %q", text, tt.wantText)
+			}
+			if tt.wantOutput != "" && !strings.HasPrefix(buf.String(), tt.wantOutput) {
+				t.Errorf("output = %q, want prefix %q", buf.String(), tt.wantOutput)
+			}
+		})
 	}
 }
 
-func TestDispatch_TextFormat(t *testing.T) {
-	var out bytes.Buffer
-	tc := &terminal.Context{Stdout: &out, Stderr: &bytes.Buffer{}}
-	ctx := context.Background()
-	events := makeTokenEvents("hello")
-
-	text, err := dispatch(ctx, tc, "text", seqFromEvents(events))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestStreamNDJSON(t *testing.T) {
+	tests := []struct {
+		name         string
+		events       []agent.Event
+		wantText     string
+		wantValidJSON bool
+	}{
+		{
+			name:          "emits valid JSON per event",
+			events:        makeTokenEvents("tok1", "tok2"),
+			wantValidJSON: true,
+		},
+		{
+			name:     "accumulates token text",
+			events:   makeTokenEvents("foo", "bar"),
+			wantText: "foobar",
+		},
 	}
-	if text != "hello" {
-		t.Errorf("text = %q, want %q", text, "hello")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			text, err := streamNDJSON(context.Background(), &buf, seqFromEvents(tt.events))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantText != "" && text != tt.wantText {
+				t.Errorf("text = %q, want %q", text, tt.wantText)
+			}
+			if tt.wantValidJSON {
+				for i, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+					if line == "" {
+						continue
+					}
+					var ev agent.Event
+					if err := json.Unmarshal([]byte(line), &ev); err != nil {
+						t.Errorf("line %d is not valid JSON: %v — %q", i, err, line)
+					}
+				}
+			}
+		})
 	}
 }
 
-func TestDispatch_NDJSONFormat(t *testing.T) {
-	var out bytes.Buffer
-	tc := &terminal.Context{Stdout: &out, Stderr: &bytes.Buffer{}}
-	ctx := context.Background()
-	events := makeTokenEvents("hello")
-
-	_, err := dispatch(ctx, tc, "ndjson", seqFromEvents(events))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestDispatch(t *testing.T) {
+	tests := []struct {
+		name       string
+		format     string
+		events     []agent.Event
+		wantText   string
+		wantInOut  string
+	}{
+		{
+			name:     "text format writes tokens and returns text",
+			format:   "text",
+			events:   makeTokenEvents("hello"),
+			wantText: "hello",
+		},
+		{
+			name:      "ndjson format emits JSON and returns text",
+			format:    "ndjson",
+			events:    makeTokenEvents("hello"),
+			wantInOut: `"kind"`,
+		},
 	}
-	if !strings.Contains(out.String(), `"kind"`) {
-		t.Errorf("expected NDJSON output containing JSON fields, got %q", out.String())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			tc := &terminal.Context{Stdout: &out, Stderr: &bytes.Buffer{}}
+
+			text, err := dispatch(context.Background(), tc, tt.format, seqFromEvents(tt.events))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantText != "" && text != tt.wantText {
+				t.Errorf("text = %q, want %q", text, tt.wantText)
+			}
+			if tt.wantInOut != "" && !strings.Contains(out.String(), tt.wantInOut) {
+				t.Errorf("output = %q, want to contain %q", out.String(), tt.wantInOut)
+			}
+		})
 	}
 }

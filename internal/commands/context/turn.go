@@ -10,6 +10,16 @@ import (
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
+// stdinTTY reports whether the effective stdin is an interactive terminal.
+// If tc.Stdin is injected (e.g. by PipelineRunner), it is always treated as
+// non-TTY piped input regardless of os.Stdin's file-descriptor state.
+func stdinTTY(tc *terminal.Context) bool {
+	if tc.Stdin != nil {
+		return false
+	}
+	return isatty(os.Stdin.Fd())
+}
+
 // runTurn executes a single conversation turn or starts a REPL, depending on
 // how input is available:
 //
@@ -27,14 +37,32 @@ func runTurn(
 	msg string,
 	format string,
 ) error {
+	return doRunTurn(ctx, tc, a, st, sess, msg, format, stdinTTY(tc))
+}
+
+// doRunTurn is the testable core of runTurn. The tty parameter controls whether
+// stdin is treated as an interactive terminal, allowing tests to exercise all
+// branches without a real PTY.
+func doRunTurn(
+	ctx context.Context,
+	tc *terminal.Context,
+	a agent.Agent,
+	st agent.SessionStore,
+	sess *agent.Session,
+	msg string,
+	format string,
+	tty bool,
+) error {
+	stdin := stdinReader(tc)
+
 	// Branch 1: explicit message provided via flag.
 	if msg != "" {
 		return executeSingleTurn(ctx, tc, a, st, sess, msg, format)
 	}
 
 	// Branch 2: stdin is not a TTY — read piped input as the message.
-	if !isatty(os.Stdin.Fd()) {
-		data, err := io.ReadAll(stdinReader(tc))
+	if !tty {
+		data, err := io.ReadAll(stdin)
 		if err != nil {
 			return fmt.Errorf("context: read stdin: %w", err)
 		}
@@ -51,7 +79,7 @@ func runTurn(
 	}
 
 	// Branch 4: TTY + text format + no message → REPL.
-	return runREPL(ctx, tc, a, st, sess, format, stdinReader(tc))
+	return runREPL(ctx, tc, a, st, sess, format, stdin)
 }
 
 // executeSingleTurn appends msg as a user message, runs the agent, streams the
