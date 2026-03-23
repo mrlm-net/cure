@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -44,17 +45,20 @@ func NewJSONStore(dir string) (*JSONStore, error) {
 	return &JSONStore{dir: abs}, nil
 }
 
-// validateID rejects session IDs that would be unsafe to use as filenames.
+// validSessionID matches the output of newSessionID: 1–64 lowercase hex characters.
+// This allow-list is intentionally strict — any ID that doesn't match is rejected
+// before it reaches the filesystem, eliminating path-traversal risk entirely.
+var validSessionID = regexp.MustCompile(`^[0-9a-f]{1,64}$`)
+
+// validateID rejects session IDs that do not match the allow-list.
+// Only lowercase hex strings of length 1–64 are accepted. This matches the
+// output of [agent.NewSession] exactly and is stricter than a deny-list.
 func validateID(id string) error {
-	switch {
-	case id == "":
-		return fmt.Errorf("store: invalid session ID: empty string")
-	case strings.ContainsRune(id, '/'):
-		return fmt.Errorf("store: invalid session ID %q: contains '/'", id)
-	case strings.ContainsRune(id, '\\'):
-		return fmt.Errorf("store: invalid session ID %q: contains '\\'", id)
-	case strings.ContainsRune(id, 0):
-		return fmt.Errorf("store: invalid session ID %q: contains null byte", id)
+	if !validSessionID.MatchString(id) {
+		if id == "" {
+			return fmt.Errorf("store: invalid session ID: empty string")
+		}
+		return fmt.Errorf("store: invalid session ID %q: must match [0-9a-f]{1,64}", id)
 	}
 	return nil
 }

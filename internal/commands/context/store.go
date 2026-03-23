@@ -10,23 +10,22 @@ import (
 )
 
 // defaultStoreDir returns the directory used to store cure sessions.
-// It respects XDG_DATA_HOME if set; otherwise falls back to
-// ~/.local/share/cure/sessions.
-func defaultStoreDir() string {
+// It respects XDG_DATA_HOME if set; otherwise uses ~/.local/share/cure/sessions.
+// Returns an error if the home directory cannot be determined.
+func defaultStoreDir() (string, error) {
 	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
-		return filepath.Join(xdg, "cure", "sessions")
+		return filepath.Join(xdg, "cure", "sessions"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		// Fallback: use a relative path so the caller still gets something usable.
-		return filepath.Join(".local", "share", "cure", "sessions")
+		return "", fmt.Errorf("context: cannot determine home directory for session store: %w", err)
 	}
-	return filepath.Join(home, ".local", "share", "cure", "sessions")
+	return filepath.Join(home, ".local", "share", "cure", "sessions"), nil
 }
 
 // DefaultStoreDir returns the directory used to store cure sessions.
 // Exported for use by cmd/cure/main.go.
-func DefaultStoreDir() string {
+func DefaultStoreDir() (string, error) {
 	return defaultStoreDir()
 }
 
