@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"iter"
+	"sync"
 	"testing"
 )
 
@@ -73,6 +75,55 @@ func TestNew(t *testing.T) {
 			t.Errorf("expected ErrProviderNotFound, got %v", err)
 		}
 	})
+}
+
+func BenchmarkRegistryNew(b *testing.B) {
+	cases := []struct {
+		name      string
+		providers int
+	}{
+		{"1provider", 1},
+		{"10providers", 10},
+	}
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			resetRegistry()
+			b.Cleanup(resetRegistry)
+			for i := 0; i < tc.providers; i++ {
+				name := fmt.Sprintf("bench-provider-%d", i)
+				Register(name, stubFactory(name))
+			}
+			b.ResetTimer()
+			for range b.N {
+				_, _ = New("bench-provider-0", nil)
+			}
+		})
+	}
+}
+
+func TestRegistryConcurrent(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			name := fmt.Sprintf("concurrent-provider-%d", i)
+			Register(name, stubFactory(name))
+			_, _ = New(name, nil)
+		}()
+	}
+
+	wg.Wait()
+
+	names := Registered()
+	if len(names) != goroutines {
+		t.Errorf("Registered() returned %d names, want %d", len(names), goroutines)
+	}
 }
 
 func TestRegistered(t *testing.T) {
