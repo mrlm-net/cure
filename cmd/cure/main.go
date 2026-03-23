@@ -5,10 +5,13 @@ import (
 	"os"
 	"path/filepath"
 
+	_ "github.com/mrlm-net/cure/internal/agent/claude"
 	"github.com/mrlm-net/cure/internal/commands"
 	"github.com/mrlm-net/cure/internal/commands/completion"
+	ctxcmd "github.com/mrlm-net/cure/internal/commands/context"
 	"github.com/mrlm-net/cure/internal/commands/generate"
 	"github.com/mrlm-net/cure/internal/commands/trace"
+	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
@@ -24,11 +27,19 @@ func run(args []string) error {
 	// Load config with precedence: defaults → global → local → env
 	cfg := loadConfig()
 
+	// Initialise the session store for the context command group.
+	sessionStore, err := agentstore.NewJSONStore(ctxcmd.DefaultStoreDir())
+	if err != nil {
+		return fmt.Errorf("failed to initialise session store: %w", err)
+	}
+
 	router := terminal.New(terminal.WithConfig(cfg))
 	router.Register(commands.NewVersionCommand())
 	router.Register(terminal.NewHelpCommand(router))
 	router.Register(trace.NewTraceCommand())
 	router.Register(generate.NewGenerateCommand())
+	// Register context command BEFORE completion so it is included in completions.
+	router.Register(ctxcmd.NewContextCommand(sessionStore))
 	router.Register(completion.NewCompletionCommand(router))
 	return router.RunArgs(args)
 }
