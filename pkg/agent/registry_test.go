@@ -110,7 +110,6 @@ func TestRegistryConcurrent(t *testing.T) {
 	wg.Add(goroutines)
 
 	for i := 0; i < goroutines; i++ {
-		i := i
 		go func() {
 			defer wg.Done()
 			name := fmt.Sprintf("concurrent-provider-%d", i)
