@@ -36,7 +36,7 @@ func RunSessionStoreTests(t *testing.T, store SessionStore) {
 		}
 	})
 	t.Run("Load returns ErrSessionNotFound for unknown ID", func(t *testing.T) {
-		_, err := store.Load(ctx, "nonexistent-id-xyz")
+		_, err := store.Load(ctx, "000000000000000000000000deadbeef")
 		if !errors.Is(err, ErrSessionNotFound) {
 			t.Errorf("expected ErrSessionNotFound, got %v", err)
 		}
@@ -69,7 +69,7 @@ func RunSessionStoreTests(t *testing.T, store SessionStore) {
 		}
 	})
 	t.Run("Delete returns ErrSessionNotFound for unknown ID", func(t *testing.T) {
-		err := store.Delete(ctx, "nonexistent-id-xyz")
+		err := store.Delete(ctx, "000000000000000000000000deadbeef")
 		if !errors.Is(err, ErrSessionNotFound) {
 			t.Errorf("expected ErrSessionNotFound, got %v", err)
 		}
@@ -103,7 +103,7 @@ func RunSessionStoreTests(t *testing.T, store SessionStore) {
 		}
 	})
 	t.Run("Fork returns ErrSessionNotFound for unknown ID", func(t *testing.T) {
-		_, err := store.Fork(ctx, "nonexistent-id-xyz")
+		_, err := store.Fork(ctx, "000000000000000000000000deadbeef")
 		if !errors.Is(err, ErrSessionNotFound) {
 			t.Errorf("expected ErrSessionNotFound, got %v", err)
 		}

@@ -28,7 +28,11 @@ func run(args []string) error {
 	cfg := loadConfig()
 
 	// Initialise the session store for the context command group.
-	sessionStore, err := agentstore.NewJSONStore(ctxcmd.DefaultStoreDir())
+	storeDir, err := ctxcmd.DefaultStoreDir()
+	if err != nil {
+		return fmt.Errorf("failed to determine session store directory: %w", err)
+	}
+	sessionStore, err := agentstore.NewJSONStore(storeDir)
 	if err != nil {
 		return fmt.Errorf("failed to initialise session store: %w", err)
 	}

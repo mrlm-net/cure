@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -107,12 +108,13 @@ func TestJSONStore_ListSkipsCorrupt(t *testing.T) {
 	}
 }
 
-// TestJSONStore_IDValidation verifies that invalid IDs are rejected.
+// TestJSONStore_IDValidation verifies that invalid IDs are rejected and valid
+// hex IDs are accepted. The allow-list is [0-9a-f]{1,64}.
 func TestJSONStore_IDValidation(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	cases := []struct {
+	invalid := []struct {
 		name string
 		id   string
 	}{
@@ -120,10 +122,15 @@ func TestJSONStore_IDValidation(t *testing.T) {
 		{"slash", "bad/id"},
 		{"backslash", "bad\\id"},
 		{"null byte", "bad\x00id"},
+		{"dot-dot", "..hidden"},
+		{"uppercase hex", "ABCDEF123456"},
+		{"too long", strings.Repeat("a", 65)}, // 65 lowercase-hex chars, exceeds max of 64
+		{"non-hex ascii", "hello-world"},
+		{"unicode", "café"},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tc := range invalid {
+		t.Run("invalid/"+tc.name, func(t *testing.T) {
 			sess := &agent.Session{ID: tc.id}
 
 			if err := s.Save(ctx, sess); err == nil {
@@ -142,6 +149,27 @@ func TestJSONStore_IDValidation(t *testing.T) {
 				t.Error("Delete: expected error for invalid ID, got nil")
 			} else if errors.Is(err, agent.ErrSessionNotFound) {
 				t.Errorf("Delete: expected validation error, got ErrSessionNotFound")
+			}
+		})
+	}
+
+	// Valid IDs: lowercase hex of length 1–64.
+	valid := []struct {
+		name string
+		id   string
+	}{
+		{"single hex char", "a"},
+		{"typical 32-char id", "0123456789abcdef0123456789abcdef"},
+		{"max length 64 chars", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+	}
+
+	for _, tc := range valid {
+		t.Run("valid/"+tc.name, func(t *testing.T) {
+			// Save a real session with this ID to confirm it's accepted.
+			sess := agent.NewSession("p", "m")
+			sess.ID = tc.id
+			if err := s.Save(ctx, sess); err != nil {
+				t.Errorf("Save: unexpected error for valid ID %q: %v", tc.id, err)
 			}
 		})
 	}
