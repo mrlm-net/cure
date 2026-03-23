@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -123,7 +124,7 @@ func TestJSONStore_IDValidation(t *testing.T) {
 		{"null byte", "bad\x00id"},
 		{"dot-dot", "..hidden"},
 		{"uppercase hex", "ABCDEF123456"},
-		{"too long", "a" + string(make([]byte, 64))}, // 65 chars
+		{"too long", strings.Repeat("a", 65)}, // 65 lowercase-hex chars, exceeds max of 64
 		{"non-hex ascii", "hello-world"},
 		{"unicode", "café"},
 	}
