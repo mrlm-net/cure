@@ -31,7 +31,7 @@ func TestNewContextCommand_NewAndResumeRegistered(t *testing.T) {
 	}
 }
 
-func TestNewContextCommand_ListForkDeleteNotRegistered(t *testing.T) {
+func TestNewContextCommand_ListForkDeleteRegistered(t *testing.T) {
 	st := newMockStore()
 	cmd := NewContextCommand(st)
 
@@ -41,8 +41,8 @@ func TestNewContextCommand_ListForkDeleteNotRegistered(t *testing.T) {
 	}
 
 	for _, name := range []string{"list", "fork", "delete"} {
-		if _, found := router.Lookup(name); found {
-			t.Errorf("expected %q NOT to be registered (pending #56), but it was", name)
+		if _, found := router.Lookup(name); !found {
+			t.Errorf("expected %q to be registered", name)
 		}
 	}
 }

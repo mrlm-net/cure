@@ -17,6 +17,8 @@ func NewContextCommand(st agent.SessionStore) terminal.Command {
 	)
 	router.Register(&NewCommand{store: st})
 	router.Register(&ResumeCommand{store: st})
-	// TODO(#56): register ListCommand, ForkCommand, DeleteCommand here
+	router.Register(&ListCommand{store: st})
+	router.Register(&ForkCommand{store: st})
+	router.Register(&DeleteCommand{store: st})
 	return router
 }
