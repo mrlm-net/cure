@@ -74,6 +74,11 @@ func (c *DeleteCommand) Run(ctx context.Context, tc *terminal.Context) error {
 		}
 	}
 
+	// Note: there is a TOCTOU window between Load (above) and Delete here.
+	// A concurrent delete by another process would cause ErrSessionNotFound;
+	// this is treated the same as a user-visible not-found error, which is
+	// acceptable since SessionStore implementations are required to be
+	// concurrent-safe and the session is genuinely gone either way.
 	if err := c.store.Delete(ctx, sessionID); err != nil {
 		if errors.Is(err, agent.ErrSessionNotFound) {
 			return fmt.Errorf("context delete: session %q not found", sessionID)
@@ -89,6 +94,7 @@ func (c *DeleteCommand) Run(ctx context.Context, tc *terminal.Context) error {
 // (or os.Stdin if tc.Stdin is nil). Returns true only if the user types "y" or "yes".
 func confirmDelete(tc *terminal.Context, sessionID string) (bool, error) {
 	fmt.Fprintf(tc.Stdout, "Delete session %q? [y/N] ", sessionID)
+	// stdinReader(tc) returns tc.Stdin when injected, otherwise os.Stdin.
 	r := stdinReader(tc)
 	scanner := bufio.NewScanner(r)
 	if !scanner.Scan() {

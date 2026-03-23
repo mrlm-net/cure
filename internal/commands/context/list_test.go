@@ -20,6 +20,8 @@ func TestListCommand(t *testing.T) {
 		provider     string
 		wantContains []string
 		wantNot      []string
+		wantErr      bool
+		errContains  string
 	}{
 		{
 			name:         "empty store prints no-sessions message",
@@ -62,6 +64,21 @@ func TestListCommand(t *testing.T) {
 			format:       "text",
 			wantContains: []string{"..."},
 		},
+		{
+			name: "long provider name is truncated in text format",
+			sessions: []*agent.Session{
+				{ID: "abc", Provider: "google-vertex-ai", Model: "m", History: []agent.Message{}, UpdatedAt: time.Now()},
+			},
+			format:       "text",
+			wantContains: []string{"google-..."},
+		},
+		{
+			name:        "unknown format returns error",
+			sessions:    nil,
+			format:      "xml",
+			wantErr:     true,
+			errContains: "unknown format",
+		},
 	}
 
 	for _, tt := range tests {
@@ -75,7 +92,17 @@ func TestListCommand(t *testing.T) {
 			var out bytes.Buffer
 			tc := &terminal.Context{Stdout: &out, Stderr: &bytes.Buffer{}}
 
-			if err := cmd.Run(context.Background(), tc); err != nil {
+			err := cmd.Run(context.Background(), tc)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error = %q, want to contain %q", err.Error(), tt.errContains)
+				}
+				return
+			}
+			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 

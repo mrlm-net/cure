@@ -57,7 +57,7 @@ func (c *ListCommand) Run(ctx context.Context, tc *terminal.Context) error {
 
 	// Apply optional provider filter.
 	if c.provider != "" {
-		filtered := sessions[:0]
+		filtered := make([]*agent.Session, 0, len(sessions))
 		for _, s := range sessions {
 			if s.Provider == c.provider {
 				filtered = append(filtered, s)
@@ -66,10 +66,14 @@ func (c *ListCommand) Run(ctx context.Context, tc *terminal.Context) error {
 		sessions = filtered
 	}
 
-	if c.format == "ndjson" {
+	switch c.format {
+	case "ndjson":
 		return listNDJSON(tc, sessions)
+	case "text", "":
+		return listText(tc, sessions)
+	default:
+		return fmt.Errorf("context list: unknown format %q (want \"text\" or \"ndjson\")", c.format)
 	}
-	return listText(tc, sessions)
 }
 
 // listText writes a fixed-width text table to tc.Stdout.
@@ -91,12 +95,16 @@ func listText(tc *terminal.Context, sessions []*agent.Session) error {
 		if len(shortID) > 12 {
 			shortID = shortID[:12]
 		}
+		provider := s.Provider
+		if len(provider) > 10 {
+			provider = provider[:7] + "..."
+		}
 		model := s.Model
 		if len(model) > 20 {
 			model = model[:17] + "..."
 		}
 		fmt.Fprintf(tc.Stdout, "%-12s  %-10s  %-20s  %8d  %s\n",
-			shortID, s.Provider, model, msgCount, updated)
+			shortID, provider, model, msgCount, updated)
 	}
 	return nil
 }

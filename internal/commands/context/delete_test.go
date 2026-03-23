@@ -3,6 +3,7 @@ package ctxcmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -122,7 +123,7 @@ func TestDeleteCommand(t *testing.T) {
 
 			if tt.seedSession != nil {
 				_, loadErr := st.Load(context.Background(), tt.seedSession.ID)
-				deleted := loadErr == agent.ErrSessionNotFound
+				deleted := errors.Is(loadErr, agent.ErrSessionNotFound)
 				if tt.wantDeleted && !deleted {
 					t.Error("expected session to be deleted, but it still exists")
 				}
