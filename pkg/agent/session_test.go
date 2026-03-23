@@ -101,6 +101,18 @@ func TestSessionFork(t *testing.T) {
 	})
 }
 
+func TestNewSessionUniqueIDs(t *testing.T) {
+	const count = 1000
+	seen := make(map[string]struct{}, count)
+	for i := 0; i < count; i++ {
+		s := agent.NewSession("p", "m")
+		if _, dup := seen[s.ID]; dup {
+			t.Fatalf("duplicate session ID after %d iterations: %q", i, s.ID)
+		}
+		seen[s.ID] = struct{}{}
+	}
+}
+
 func TestSessionAppend(t *testing.T) {
 	t.Run("AppendUserMessage updates History and UpdatedAt", func(t *testing.T) {
 		s := agent.NewSession("p", "m")

@@ -1,6 +1,7 @@
 package agent_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/mrlm-net/cure/pkg/agent"
@@ -30,9 +31,22 @@ func TestEstimateTokens(t *testing.T) {
 }
 
 func BenchmarkEstimateTokens(b *testing.B) {
-	text := "The quick brown fox jumps over the lazy dog"
-	b.ResetTimer()
-	for range b.N {
-		agent.EstimateTokens(text)
+	const base = "The quick brown fox jumps over the lazy dog. "
+	cases := []struct {
+		name string
+		n    int
+	}{
+		{"1msg", 1},
+		{"10msg", 10},
+		{"100msg", 100},
+	}
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			content := strings.Repeat(base, tc.n)
+			b.ResetTimer()
+			for range b.N {
+				agent.EstimateTokens(content)
+			}
+		})
 	}
 }

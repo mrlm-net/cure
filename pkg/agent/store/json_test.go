@@ -191,6 +191,33 @@ func TestJSONStore_DirPermissions(t *testing.T) {
 	}
 }
 
+func BenchmarkJSONStoreRoundTrip(b *testing.B) {
+	s, err := store.NewJSONStore(b.TempDir())
+	if err != nil {
+		b.Fatalf("NewJSONStore: %v", err)
+	}
+	ctx := context.Background()
+
+	sess := agent.NewSession("claude", "claude-opus-4-6")
+	for i := 0; i < 10; i++ {
+		if i%2 == 0 {
+			sess.AppendUserMessage("user message content for benchmarking purposes")
+		} else {
+			sess.AppendAssistantMessage("assistant reply content for benchmarking")
+		}
+	}
+
+	b.ResetTimer()
+	for range b.N {
+		if err := s.Save(ctx, sess); err != nil {
+			b.Fatalf("Save: %v", err)
+		}
+		if _, err := s.Load(ctx, sess.ID); err != nil {
+			b.Fatalf("Load: %v", err)
+		}
+	}
+}
+
 // TestJSONStore_ListSortOrder verifies sessions are returned newest-first.
 func TestJSONStore_ListSortOrder(t *testing.T) {
 	dir := t.TempDir()
