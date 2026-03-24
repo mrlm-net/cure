@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-24
+
 ### Added
 
 - `pkg/agent/store`: `JSONStore` — file-backed `SessionStore` that persists each session as a JSON file; tilde expansion in `dir`, lazy directory creation on first `Save`
@@ -35,6 +37,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pkg/agent`: `RunSessionStoreTests(t, store)` — shared test suite callable from any concrete store's test file
 - `pkg/agent`: sentinel errors `ErrProviderNotFound`, `ErrSessionNotFound`, `ErrCountNotSupported`
 - `pkg/agent`: `EstimateTokens(text)` — len/4 token heuristic for context window budget calculations
+- `cure context new --provider <name> --message <text>` — start a new AI conversation session; streams the response and persists the session to `~/.local/share/cure/sessions/`
+- `cure context resume <id> --message <text>` — continue an existing session by appending a new user message and streaming the response
+- `cure context list [--format text|ndjson]` — list all saved sessions sorted newest-first; provider name truncated to 10 chars in text output
+- `cure context fork <id>` — deep-copy a session with a new ID; prints the forked ID to stdout
+- `cure context delete [--yes] <id>` — delete a session; prompts for confirmation unless `--yes` is supplied
+- `cure context` REPL mode — when invoked without a subcommand, enters an interactive read-evaluate-print loop for multi-turn conversations
+- `cmd/cure`: claude provider defaults (`agent.claude.model: claude-opus-4-6`, `agent.claude.max_tokens: 8192`) added to `loadConfig()`
+
+### Security
+
+- `pkg/agent/store`: `validateID` replaced deny-list with allow-list regex `^[0-9a-f]{1,64}$` — eliminates path-traversal surface for all characters outside lowercase hex
+- `internal/commands/context`: `DefaultStoreDir()` now returns `(string, error)` — fails loudly if the home directory cannot be determined instead of silently falling back to a relative path
 
 ## [0.4.1] - 2026-03-21
 
