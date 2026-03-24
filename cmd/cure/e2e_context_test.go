@@ -124,6 +124,7 @@ func TestE2E_ContextNew_WithMockServer(t *testing.T) {
 // a "No sessions found" message when the session directory is empty.
 func TestE2E_ContextList_Empty(t *testing.T) {
 	xdgHome := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", xdgHome)
 
 	var out, errBuf bytes.Buffer
 	err := runContext(t, sessionDir(xdgHome), &out, &errBuf, "list")
@@ -177,6 +178,7 @@ func TestE2E_ContextList_NDJSON(t *testing.T) {
 // does not exist exits with an error containing a not-found message.
 func TestE2E_ContextResume_UnknownSession(t *testing.T) {
 	xdgHome := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", xdgHome)
 
 	var out, errBuf bytes.Buffer
 	// Use a valid hex ID that simply doesn't exist in the store.
