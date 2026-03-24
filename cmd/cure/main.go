@@ -55,6 +55,9 @@ func loadConfig() *config.Config {
 		"format":  "json",
 		"verbose": false,
 		"redact":  true,
+		// Claude provider defaults — overridable via config file or env.
+		"agent.claude.model":      "claude-opus-4-6",
+		"agent.claude.max_tokens": 8192,
 	}
 
 	// Global config (~/.cure.json)
