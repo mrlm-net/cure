@@ -102,7 +102,10 @@ func TestE2E_ContextNew_WithMockServer(t *testing.T) {
 	}
 
 	// Parse the session file and verify its structure.
-	data, _ := os.ReadFile(filepath.Join(sessionDir(xdgHome), jsonFiles[0].Name()))
+	data, err := os.ReadFile(filepath.Join(sessionDir(xdgHome), jsonFiles[0].Name()))
+	if err != nil {
+		t.Fatalf("ReadFile session JSON: %v", err)
+	}
 	var sess map[string]any
 	if err := json.Unmarshal(data, &sess); err != nil {
 		t.Fatalf("session file is not valid JSON: %v", err)
@@ -139,6 +142,7 @@ func TestE2E_ContextList_NDJSON(t *testing.T) {
 	defer ts.Close()
 
 	xdgHome := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", xdgHome)
 	t.Setenv("ANTHROPIC_BASE_URL", ts.URL)
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 
@@ -193,6 +197,7 @@ func TestE2E_ContextFork(t *testing.T) {
 	defer ts.Close()
 
 	xdgHome := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", xdgHome)
 	t.Setenv("ANTHROPIC_BASE_URL", ts.URL)
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 
@@ -206,7 +211,10 @@ func TestE2E_ContextFork(t *testing.T) {
 	}
 
 	// Identify the source session ID from the file.
-	entries, _ := os.ReadDir(dir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
 	var sourceID string
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".json") {
@@ -247,13 +255,16 @@ func TestE2E_ContextFork(t *testing.T) {
 	}
 }
 
-// TestE2E_ContextDelete_Yes verifies that `context delete <id> --yes`
-// removes the session file and exits 0.
+// TestE2E_ContextDelete_Yes verifies that `context delete --yes <id>`
+// removes the session file and exits 0. Note: --yes must precede the
+// positional ID because Go's flag package stops parsing at the first
+// non-flag argument.
 func TestE2E_ContextDelete_Yes(t *testing.T) {
 	ts := mockAnthropicServer(t, "delete test")
 	defer ts.Close()
 
 	xdgHome := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", xdgHome)
 	t.Setenv("ANTHROPIC_BASE_URL", ts.URL)
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 
@@ -266,7 +277,10 @@ func TestE2E_ContextDelete_Yes(t *testing.T) {
 		t.Fatalf("context new: %v", err)
 	}
 
-	entries, _ := os.ReadDir(dir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
 	var targetID string
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".json") {
