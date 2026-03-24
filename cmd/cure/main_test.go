@@ -58,6 +58,11 @@ func TestRun(t *testing.T) {
 			args:    []string{"help", "completion"},
 			wantErr: false,
 		},
+		{
+			name:    "context command help",
+			args:    []string{"help", "context"},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -113,6 +118,15 @@ func TestRun_HelpOutput(t *testing.T) {
 	want := "Available commands:"
 	if !strings.Contains(got, want) {
 		t.Errorf("help output = %q, want to contain %q", got, want)
+	}
+}
+
+func TestRun_ContextInHelp(t *testing.T) {
+	// Verify "context" appears in the top-level help output when run() is used
+	// (which registers all commands including context).
+	err := run([]string{"help", "context"})
+	if err != nil {
+		t.Errorf("run([help context]) = %v, want nil", err)
 	}
 }
 
