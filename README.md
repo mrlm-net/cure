@@ -6,15 +6,16 @@
 
 ## Overview
 
-Cure automates repetitive development tasks through code generation and network diagnostics. Generate templates for AI assistants (`CLAUDE.md`), trace HTTP/TCP/UDP connections with detailed timing and metadata, and output results in developer-friendly formats (NDJSON, HTML). Built with zero external dependencies using only Go's standard library, cure is designed as a foundation for developers who need reliable, auditable tooling without dependency bloat.
+Cure automates repetitive development tasks through AI context management, code generation, and network diagnostics. Manage multi-turn AI conversations from the terminal (`cure context`), generate templates for AI assistants (`CLAUDE.md`), trace HTTP/TCP/UDP connections with detailed timing and metadata, and output results in developer-friendly formats (NDJSON, HTML). Built with minimal external dependencies and only Go's standard library for core functionality, cure is designed as a foundation for developers who need reliable, auditable tooling without dependency bloat.
 
-The project is under active development — currently at v0.4.0 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
+The project is under active development — currently at v0.5.0 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
 
 ## Key Features
 
+- **AI context management** — Start, resume, list, fork, and delete multi-turn AI conversations from the terminal; sessions are persisted to `~/.local/share/cure/sessions/` and work with any registered provider
 - **Template generation** — Create `CLAUDE.md` project context files for AI assistants with interactive or flag-driven configuration
 - **Network tracing** — Trace HTTP requests (DNS resolution, TLS handshake, response timing), TCP connections, and UDP packet exchanges with detailed event streams
-- **Flexible output** — Export trace data as NDJSON for log aggregation or HTML for visual inspection with syntax-highlighted JSON payloads
+- **Flexible output** — Export data as NDJSON for log aggregation or HTML for visual inspection with syntax-highlighted JSON payloads
 - **Hierarchical configuration** — Merge settings from defaults, global (`~/.cure.json`), local (`.cure.json`), environment variables (`CURE_` prefix), and CLI flags with clear precedence
 - **Shell completion** — Generate bash and zsh completion scripts with dynamic command introspection
 
@@ -43,6 +44,18 @@ make build
 
 ## Quick Start
 
+Start an AI conversation session (requires `ANTHROPIC_API_KEY`):
+
+```sh
+cure context new --provider claude --message "Summarise the Go 1.25 release notes."
+```
+
+Resume an existing session and continue the conversation:
+
+```sh
+cure context resume <session-id> --message "Which change is most impactful for CLI tools?"
+```
+
 Generate a `CLAUDE.md` template for configuring AI assistants:
 
 ```sh
@@ -67,6 +80,17 @@ source <(cure completion bash)
 
 - `cure version` — Display version and build information
 - `cure help [command]` — Show help for cure or a specific command
+
+### AI Context Management
+
+- `cure context new --provider <name> --message <text>` — Start a new conversation session; streams the response to stdout and persists the session
+- `cure context resume <id> --message <text>` — Continue an existing session with a new user message
+- `cure context list [--format text|ndjson]` — List saved sessions sorted newest-first
+- `cure context fork <id>` — Deep-copy a session with a new ID; prints the forked ID to stdout
+- `cure context delete [--yes] <id>` — Delete a session (prompts for confirmation unless `--yes` is supplied)
+- `cure context` *(no args)* — Enter REPL mode for interactive multi-turn conversation
+
+Sessions are stored in `~/.local/share/cure/sessions/` (XDG-compliant). Set `ANTHROPIC_API_KEY` before using the `claude` provider.
 
 ### Tracing
 
@@ -352,7 +376,7 @@ branch, err := s.Fork(ctx, session.ID)
 
 `JSONStore.Save` is protected by a `sync.Mutex` and is safe for concurrent use from multiple goroutines. `Load`, `List`, `Delete`, and `Fork` use direct filesystem reads and are inherently safe for concurrent access.
 
-**ID validation** — session IDs that contain `/`, `\`, null bytes, or are empty strings are rejected to prevent path traversal attacks.
+**ID validation** — session IDs must match `^[0-9a-f]{1,64}$` (1–64 lowercase hex characters). Any other value is rejected before touching the filesystem, eliminating path-traversal surface entirely.
 
 ### Testing a custom store
 
@@ -422,11 +446,14 @@ For detailed guidance, see `CLAUDE.md` in the repository root.
 
 ## Roadmap
 
-Cure is currently at v0.4.0. The next milestone is v0.5.0, which focuses on foundation packages for developer experience: `pkg/prompt` for interactive prompts, `pkg/fs` for filesystem operations, `pkg/style` for terminal styling, and `pkg/env` for environment inspection. This release will also introduce the `cure doctor` command for validating the development environment and `--dry-run` support across commands.
+Cure is currently at v0.5.0. The v0.5.0 release delivered `pkg/agent` — provider-agnostic AI agent context management — along with the `cure context` command group and the Anthropic Claude adapter.
+
+Upcoming milestones:
+
+- **v0.6.0** — Foundation packages for developer experience: `pkg/prompt` for interactive prompts, `pkg/fs` for filesystem operations, `pkg/style` for terminal styling, and `pkg/env` for environment inspection; `cure doctor` command; `--dry-run` support across commands
+- **v0.7.0+** — Expanded template generation (template directories, multi-file generation), additional AI provider adapters, and plugin architecture exploration
 
 The v1.0.0 milestone marks API stability for `pkg/` packages and freeze of breaking changes. Track progress on the [GitHub Projects board](https://github.com/orgs/mrlm-net/projects/9).
-
-Future releases (v0.6.0+) will expand template generation capabilities, introduce template directories for multi-file generation, and explore plugin architecture for extensibility.
 
 ## License
 
