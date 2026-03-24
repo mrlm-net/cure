@@ -25,11 +25,14 @@ func (c *DeleteCommand) Name() string        { return "delete" }
 func (c *DeleteCommand) Description() string { return "Delete an AI conversation session" }
 
 func (c *DeleteCommand) Usage() string {
-	return `Usage: cure context delete <session-id> [--yes]
+	return `Usage: cure context delete [--yes] <session-id>
 
 Delete a persisted AI conversation session. Without --yes the command prompts
 for confirmation when running interactively. Use --yes to skip confirmation in
 scripts or CI pipelines.
+
+Note: flags must be supplied before the positional <session-id> argument
+because Go's flag package stops parsing flags at the first non-flag token.
 
 Arguments:
   <session-id>    ID of the session to delete (required)
@@ -39,7 +42,7 @@ Flags:
 
 Examples:
   cure context delete abc123def456
-  cure context delete abc123def456 --yes
+  cure context delete --yes abc123def456
 `
 }
 

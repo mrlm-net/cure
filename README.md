@@ -120,6 +120,108 @@ import (
 
 After the blank import, `agent.New("claude", cfg)` is available. `agent.Registered()` returns a sorted list of all registered provider names.
 
+### internal/agent/claude — Anthropic Claude adapter
+
+The Claude adapter lives in `internal/agent/claude` and wires the Anthropic Go SDK into `pkg/agent`. It uses the blank-import driver pattern so your application code stays decoupled from the adapter package.
+
+**Prerequisite** — set the API key in the environment before creating the agent:
+
+```sh
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**Full example** — blank-import the adapter, create a session, stream a response, and persist it with `JSONStore`:
+
+```go
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "strings"
+
+    "github.com/mrlm-net/cure/pkg/agent"
+    "github.com/mrlm-net/cure/pkg/agent/store"
+
+    // Registers the "claude" provider via init().
+    _ "github.com/mrlm-net/cure/internal/agent/claude"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create a file-backed session store.
+    s, err := store.NewJSONStore("~/.local/share/cure/sessions")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Instantiate the Claude agent.
+    // "api_key_env" defaults to "ANTHROPIC_API_KEY".
+    // "model" defaults to "claude-opus-4-6".
+    // "max_tokens" defaults to 8192.
+    a, err := agent.New("claude", map[string]any{
+        "model":      "claude-opus-4-6",
+        "max_tokens": 8192,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Build a session.
+    session := agent.NewSession("claude", "claude-opus-4-6")
+    session.SystemPrompt = "You are a concise technical assistant."
+    session.AppendUserMessage("What is the difference between os.Rename and os.Link in Go?")
+
+    // Stream the response using Go 1.23 range-over-function syntax.
+    var response strings.Builder
+    for ev, err := range a.Run(ctx, session) {
+        if err != nil {
+            log.Fatal(err)
+        }
+        switch ev.Kind {
+        case agent.EventKindToken:
+            response.WriteString(ev.Text)
+            fmt.Print(ev.Text) // stream to terminal
+        case agent.EventKindDone:
+            fmt.Printf("\n\ntokens: in=%d out=%d stop=%s\n",
+                ev.InputTokens, ev.OutputTokens, ev.StopReason)
+        case agent.EventKindError:
+            log.Fatalf("provider error: %s", ev.Err)
+        }
+    }
+
+    // Append the assistant reply and persist the session.
+    session.AppendAssistantMessage(response.String())
+    if err := s.Save(ctx, session); err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("session saved: %s\n", session.ID)
+}
+```
+
+**Configuration keys** accepted by `NewClaudeAgent`:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `api_key_env` | `string` | `"ANTHROPIC_API_KEY"` | Name of the environment variable holding the API key |
+| `model` | `string` | `"claude-opus-4-6"` | Anthropic model ID |
+| `max_tokens` | `int` / `int64` / `float64` | `8192` | Maximum tokens in the completion |
+
+**Token counting** — call `Agent.CountTokens` before streaming to check context budget:
+
+```go
+n, err := a.CountTokens(ctx, session)
+if errors.Is(err, agent.ErrCountNotSupported) {
+    n = agent.EstimateTokens(session.SystemPrompt) // fallback heuristic
+}
+fmt.Printf("estimated context tokens: %d\n", n)
+```
+
+**Error safety** — `sanitiseError` replaces the API key value with `[REDACTED]` in all error strings, so errors are safe to log or surface to users.
+
+**Note** — `internal/agent/claude` is an internal package. It cannot be imported by external modules. This is intentional: cure ships the adapter as part of the application layer, while `pkg/agent` remains dependency-free. If you need to use the Claude adapter outside of cure, copy the adapter source into your own `internal/` package.
+
 ### Creating a session
 
 `Session` holds the full conversation state. `NewSession` generates a 128-bit cryptographically random ID.
@@ -194,6 +296,63 @@ if errors.Is(err, agent.ErrSessionNotFound) {
     // session does not exist
 }
 ```
+
+### pkg/agent/store — JSON file store
+
+`pkg/agent/store` provides `JSONStore`, a file-backed `SessionStore` implementation that is ready to use without any external dependencies.
+
+Import path: `github.com/mrlm-net/cure/pkg/agent/store`
+
+`NewJSONStore` accepts a directory path with optional tilde expansion. The directory is created lazily on the first `Save` — you do not need to create it in advance.
+
+```go
+import (
+    "context"
+    "errors"
+    "fmt"
+
+    "github.com/mrlm-net/cure/pkg/agent"
+    "github.com/mrlm-net/cure/pkg/agent/store"
+)
+
+// Create a store backed by ~/.local/share/cure/sessions.
+// The directory is created on first Save with mode 0700.
+s, err := store.NewJSONStore("~/.local/share/cure/sessions")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Save a session. Writes are atomic (os.CreateTemp + os.Rename).
+// Session files receive mode 0600.
+if err := s.Save(ctx, session); err != nil {
+    log.Fatal(err)
+}
+
+// Load it back by ID.
+loaded, err := s.Load(ctx, session.ID)
+if errors.Is(err, agent.ErrSessionNotFound) {
+    fmt.Println("session not found")
+} else if err != nil {
+    log.Fatal(err)
+}
+
+// List all sessions sorted by UpdatedAt descending.
+// Corrupt or unreadable files are silently skipped.
+sessions, err := s.List(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+for _, sess := range sessions {
+    fmt.Printf("%s  %s  %s\n", sess.ID, sess.Provider, sess.UpdatedAt.Format(time.RFC3339))
+}
+
+// Fork creates an independent copy with a new ID.
+branch, err := s.Fork(ctx, session.ID)
+```
+
+`JSONStore.Save` is protected by a `sync.Mutex` and is safe for concurrent use from multiple goroutines. `Load`, `List`, `Delete`, and `Fork` use direct filesystem reads and are inherently safe for concurrent access.
+
+**ID validation** — session IDs that contain `/`, `\`, null bytes, or are empty strings are rejected to prevent path traversal attacks.
 
 ### Testing a custom store
 

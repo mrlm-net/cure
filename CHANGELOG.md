@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pkg/agent/store`: `JSONStore` — file-backed `SessionStore` that persists each session as a JSON file; tilde expansion in `dir`, lazy directory creation on first `Save`
+- `pkg/agent/store`: `NewJSONStore(dir string) (*JSONStore, error)` — resolves `~` to the current user's home directory and returns an absolute path
+- `pkg/agent/store`: atomic writes via `os.CreateTemp` + `os.Rename`; session files receive mode `0600`, directory receives mode `0700`
+- `pkg/agent/store`: `Save` is protected by `sync.Mutex` — safe for concurrent use
+- `pkg/agent/store`: `List` silently skips corrupt or unreadable JSON files and returns a non-nil empty slice when the store directory does not exist
+- `pkg/agent/store`: ID validation rejects empty strings, `/`, `\`, and null bytes to prevent path traversal
+- `pkg/agent/store`: compile-time interface assertion `var _ agent.SessionStore = (*JSONStore)(nil)`
+- `internal/agent/claude` — Anthropic Claude provider adapter; registers as `"claude"` via `init()` using the blank-import driver pattern
+- `internal/agent/claude`: `NewClaudeAgent(cfg map[string]any) (agent.Agent, error)` — reads `api_key_env` (default `ANTHROPIC_API_KEY`), `model` (default `claude-opus-4-6`), `max_tokens` (default `8192`)
+- `internal/agent/claude`: `Run(ctx, session)` — `iter.Seq2[Event, error]` streaming response via goroutine+channel bridge over the Anthropic SDK
+- `internal/agent/claude`: `CountTokens(ctx, session)` — calls Anthropic `/v1/messages/count_tokens`; HTTP 404 responses map to `agent.ErrCountNotSupported`
+- `internal/agent/claude`: `sanitiseError` — redacts the API key value from all error strings before surfacing them
+- New external dependency: `github.com/anthropics/anthropic-sdk-go v1.27.1`
 - `pkg/agent` — provider-agnostic AI agent abstraction with core interfaces, session management, and a global registry
 - `pkg/agent`: `Agent` interface with `Run(ctx, session) iter.Seq2[Event, error]`, `CountTokens(ctx, session) (int, error)`, and `Provider() string`
 - `pkg/agent`: `AgentFactory` constructor type — `func(cfg map[string]any) (Agent, error)`
