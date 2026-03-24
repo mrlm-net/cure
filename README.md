@@ -92,6 +92,8 @@ source <(cure completion bash)
 
 Sessions are stored in `~/.local/share/cure/sessions/` (XDG-compliant). Set `ANTHROPIC_API_KEY` before using the `claude` provider.
 
+The `cure context` commands are backed by [`pkg/agent`](#pkgagent) and [`pkg/agent/store`](#pkgagentstore--json-file-store) — see those sections if you want to embed session management into your own Go programs.
+
 ### Tracing
 
 - `cure trace dns <hostname>` — Trace DNS resolution with IP addresses, CNAME chain, resolution timing, and RFC 1918 private IP classification
@@ -123,6 +125,8 @@ Cure is built on three core principles: **zero external dependencies**, **reusab
 **Minimal abstraction** — cure favors composition over complex abstractions. Commands implement a simple interface (`Name()`, `Description()`, `Usage()`, `Flags()`, `Run()`), configuration is plain `map[string]interface{}` with dot-notation access, and the router dispatches commands without heavy middleware stacks. This keeps the codebase readable and debuggable.
 
 ## pkg/agent
+
+> The [`cure context`](#ai-context-management) command group is the ready-to-use CLI front-end for this package. Use `pkg/agent` directly when you want to embed session management into your own Go programs.
 
 `pkg/agent` provides a provider-agnostic abstraction for AI agent context management. It defines the core interfaces, session lifecycle, a global provider registry, and a persistence interface — without coupling to any specific AI provider.
 
