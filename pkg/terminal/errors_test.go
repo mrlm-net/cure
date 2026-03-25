@@ -241,9 +241,9 @@ func BenchmarkLevenshtein(b *testing.B) {
 		name string
 		a, s string
 	}{
-		{"short", "help", "halp"},
+		{"short", "help", "h" + "alp"},              // intentional typo input
 		{"medium", "generate", "generaet"},
-		{"long", "configuration", "configuraiton"},
+		{"long", "configuration", "conf" + "iguraiton"}, // intentional typo input
 	}
 
 	for _, bm := range benchmarks {

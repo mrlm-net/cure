@@ -53,21 +53,17 @@ func TraceAddr(ctx context.Context, addr string, opts ...Option) error {
 
 	// DNS resolution
 	dnsStart := time.Now()
-	if cfg.emitter != nil {
-		cfg.emitter.Emit(event.NewEvent("dns_start", traceID, map[string]interface{}{
-			"host": host,
-		}))
-	}
+	emit(cfg.emitter, "dns_start", traceID, map[string]interface{}{
+		"host": host,
+	})
 
 	ips, err := net.DefaultResolver.LookupHost(ctx, host)
 	dnsDuration := time.Since(dnsStart).Milliseconds()
 	if err != nil {
-		if cfg.emitter != nil {
-			cfg.emitter.Emit(event.NewEvent("dns_done", traceID, map[string]interface{}{
-				"error":       err.Error(),
-				"duration_ms": dnsDuration,
-			}))
-		}
+		emit(cfg.emitter, "dns_done", traceID, map[string]interface{}{
+			"error":       err.Error(),
+			"duration_ms": dnsDuration,
+		})
 		return fmt.Errorf("DNS lookup failed: %w", err)
 	}
 
@@ -75,20 +71,16 @@ func TraceAddr(ctx context.Context, addr string, opts ...Option) error {
 	if len(ips) > 0 {
 		ip = ips[0]
 	}
-	if cfg.emitter != nil {
-		cfg.emitter.Emit(event.NewEvent("dns_done", traceID, map[string]interface{}{
-			"ip":          ip,
-			"duration_ms": dnsDuration,
-		}))
-	}
+	emit(cfg.emitter, "dns_done", traceID, map[string]interface{}{
+		"ip":          ip,
+		"duration_ms": dnsDuration,
+	})
 
 	// TCP connection
 	tcpStart := time.Now()
-	if cfg.emitter != nil {
-		cfg.emitter.Emit(event.NewEvent("tcp_connect_start", traceID, map[string]interface{}{
-			"addr": addr,
-		}))
-	}
+	emit(cfg.emitter, "tcp_connect_start", traceID, map[string]interface{}{
+		"addr": addr,
+	})
 
 	dialer := &net.Dialer{
 		Timeout: cfg.timeout,
@@ -96,23 +88,19 @@ func TraceAddr(ctx context.Context, addr string, opts ...Option) error {
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	tcpDuration := time.Since(tcpStart).Milliseconds()
 	if err != nil {
-		if cfg.emitter != nil {
-			cfg.emitter.Emit(event.NewEvent("tcp_connect_done", traceID, map[string]interface{}{
-				"error":       err.Error(),
-				"duration_ms": tcpDuration,
-			}))
-		}
+		emit(cfg.emitter, "tcp_connect_done", traceID, map[string]interface{}{
+			"error":       err.Error(),
+			"duration_ms": tcpDuration,
+		})
 		return fmt.Errorf("TCP connect failed: %w", err)
 	}
 	defer conn.Close()
 
-	if cfg.emitter != nil {
-		cfg.emitter.Emit(event.NewEvent("tcp_connect_done", traceID, map[string]interface{}{
-			"local_addr":  conn.LocalAddr().String(),
-			"remote_addr": conn.RemoteAddr().String(),
-			"duration_ms": tcpDuration,
-		}))
-	}
+	emit(cfg.emitter, "tcp_connect_done", traceID, map[string]interface{}{
+		"local_addr":  conn.LocalAddr().String(),
+		"remote_addr": conn.RemoteAddr().String(),
+		"duration_ms": tcpDuration,
+	})
 
 	// Send data if provided
 	if cfg.data != "" {
@@ -120,20 +108,16 @@ func TraceAddr(ctx context.Context, addr string, opts ...Option) error {
 		n, err := conn.Write([]byte(cfg.data))
 		sendDuration := time.Since(sendStart).Milliseconds()
 		if err != nil {
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("tcp_send", traceID, map[string]interface{}{
-					"error":       err.Error(),
-					"duration_ms": sendDuration,
-				}))
-			}
+			emit(cfg.emitter, "tcp_send", traceID, map[string]interface{}{
+				"error":       err.Error(),
+				"duration_ms": sendDuration,
+			})
 			return fmt.Errorf("TCP send failed: %w", err)
 		}
-		if cfg.emitter != nil {
-			cfg.emitter.Emit(event.NewEvent("tcp_send", traceID, map[string]interface{}{
-				"bytes":       n,
-				"duration_ms": sendDuration,
-			}))
-		}
+		emit(cfg.emitter, "tcp_send", traceID, map[string]interface{}{
+			"bytes":       n,
+			"duration_ms": sendDuration,
+		})
 
 		// Try to receive response
 		recvStart := time.Now()
@@ -142,26 +126,20 @@ func TraceAddr(ctx context.Context, addr string, opts ...Option) error {
 		n, err = conn.Read(buf)
 		recvDuration := time.Since(recvStart).Milliseconds()
 		if err != nil && !errors.Is(err, io.EOF) {
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("tcp_receive", traceID, map[string]interface{}{
-					"error":       err.Error(),
-					"duration_ms": recvDuration,
-				}))
-			}
+			emit(cfg.emitter, "tcp_receive", traceID, map[string]interface{}{
+				"error":       err.Error(),
+				"duration_ms": recvDuration,
+			})
 		} else {
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("tcp_receive", traceID, map[string]interface{}{
-					"bytes":       n,
-					"duration_ms": recvDuration,
-				}))
-			}
+			emit(cfg.emitter, "tcp_receive", traceID, map[string]interface{}{
+				"bytes":       n,
+				"duration_ms": recvDuration,
+			})
 		}
 	}
 
 	// Close connection
-	if cfg.emitter != nil {
-		cfg.emitter.Emit(event.NewEvent("tcp_close", traceID, map[string]interface{}{}))
-	}
+	emit(cfg.emitter, "tcp_close", traceID, map[string]interface{}{})
 
 	return nil
 }
@@ -211,6 +189,15 @@ func generateTraceID() string {
 		return hex.EncodeToString([]byte(fmt.Sprintf("%08x", time.Now().UnixNano())))
 	}
 	return hex.EncodeToString(b)
+}
+
+// emit is a nil-safe helper that calls em.Emit only when em is non-nil.
+// Centralising the nil-check removes one branch per call site and lowers
+// the cyclomatic complexity of TraceAddr.
+func emit(em event.Emitter, name, traceID string, data map[string]interface{}) {
+	if em != nil {
+		em.Emit(event.NewEvent(name, traceID, data))
+	}
 }
 
 func emitDryRunEvents(em event.Emitter, traceID, addr string) error {

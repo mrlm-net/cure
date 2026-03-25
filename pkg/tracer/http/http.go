@@ -72,11 +72,9 @@ func TraceURL(ctx context.Context, url string, opts ...Option) error {
 	trace := &httptrace.ClientTrace{
 		DNSStart: func(info httptrace.DNSStartInfo) {
 			dnsStart = time.Now()
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("dns_start", traceID, map[string]interface{}{
-					"host": info.Host,
-				}))
-			}
+			emit(cfg.emitter, "dns_start", traceID, map[string]interface{}{
+				"host": info.Host,
+			})
 		},
 		DNSDone: func(info httptrace.DNSDoneInfo) {
 			duration := time.Since(dnsStart).Milliseconds()
@@ -84,21 +82,17 @@ func TraceURL(ctx context.Context, url string, opts ...Option) error {
 			if len(info.Addrs) > 0 {
 				ip = info.Addrs[0].IP.String()
 			}
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("dns_done", traceID, map[string]interface{}{
-					"ip":          ip,
-					"duration_ms": duration,
-				}))
-			}
+			emit(cfg.emitter, "dns_done", traceID, map[string]interface{}{
+				"ip":          ip,
+				"duration_ms": duration,
+			})
 		},
 		ConnectStart: func(network, addr string) {
 			tcpStart = time.Now()
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("tcp_connect_start", traceID, map[string]interface{}{
-					"network": network,
-					"addr":    addr,
-				}))
-			}
+			emit(cfg.emitter, "tcp_connect_start", traceID, map[string]interface{}{
+				"network": network,
+				"addr":    addr,
+			})
 		},
 		ConnectDone: func(network, addr string, err error) {
 			duration := time.Since(tcpStart).Milliseconds()
@@ -110,15 +104,11 @@ func TraceURL(ctx context.Context, url string, opts ...Option) error {
 			if err != nil {
 				data["error"] = err.Error()
 			}
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("tcp_connect_done", traceID, data))
-			}
+			emit(cfg.emitter, "tcp_connect_done", traceID, data)
 		},
 		TLSHandshakeStart: func() {
 			tlsStart = time.Now()
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("tls_handshake_start", traceID, map[string]interface{}{}))
-			}
+			emit(cfg.emitter, "tls_handshake_start", traceID, map[string]interface{}{})
 		},
 		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
 			duration := time.Since(tlsStart).Milliseconds()
@@ -129,9 +119,7 @@ func TraceURL(ctx context.Context, url string, opts ...Option) error {
 			if err != nil {
 				data["error"] = err.Error()
 			}
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("tls_handshake_done", traceID, data))
-			}
+			emit(cfg.emitter, "tls_handshake_done", traceID, data)
 		},
 		GotFirstResponseByte: func() {
 			// Optional: track time to first byte
@@ -142,14 +130,11 @@ func TraceURL(ctx context.Context, url string, opts ...Option) error {
 
 	// Emit request start event
 	reqStart = time.Now()
-	if cfg.emitter != nil {
-		headers := redactHeaders(req.Header, cfg.redact)
-		cfg.emitter.Emit(event.NewEvent("http_request_start", traceID, map[string]interface{}{
-			"method":  cfg.method,
-			"url":     url,
-			"headers": headers,
-		}))
-	}
+	emit(cfg.emitter, "http_request_start", traceID, map[string]interface{}{
+		"method":  cfg.method,
+		"url":     url,
+		"headers": redactHeaders(req.Header, cfg.redact),
+	})
 
 	// Execute request
 	client := &nethttp.Client{}
@@ -167,15 +152,12 @@ func TraceURL(ctx context.Context, url string, opts ...Option) error {
 
 	// Emit response done event
 	duration := time.Since(reqStart).Milliseconds()
-	if cfg.emitter != nil {
-		headers := redactHeaders(resp.Header, cfg.redact)
-		cfg.emitter.Emit(event.NewEvent("http_response_done", traceID, map[string]interface{}{
-			"status":      resp.StatusCode,
-			"headers":     headers,
-			"body_size":   len(body),
-			"duration_ms": duration,
-		}))
-	}
+	emit(cfg.emitter, "http_response_done", traceID, map[string]interface{}{
+		"status":      resp.StatusCode,
+		"headers":     redactHeaders(resp.Header, cfg.redact),
+		"body_size":   len(body),
+		"duration_ms": duration,
+	})
 
 	return nil
 }
@@ -283,6 +265,15 @@ func tlsVersionString(version uint16) string {
 		return "TLS 1.3"
 	default:
 		return fmt.Sprintf("unknown (0x%04x)", version)
+	}
+}
+
+// emit is a nil-safe helper that calls em.Emit only when em is non-nil.
+// Centralising the nil-check removes one branch per call site and lowers
+// the cyclomatic complexity of TraceURL.
+func emit(em event.Emitter, name, traceID string, data map[string]interface{}) {
+	if em != nil {
+		em.Emit(event.NewEvent(name, traceID, data))
 	}
 }
 

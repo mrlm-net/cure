@@ -49,21 +49,17 @@ func TraceAddr(ctx context.Context, addr string, opts ...Option) error {
 
 	// DNS resolution
 	dnsStart := time.Now()
-	if cfg.emitter != nil {
-		cfg.emitter.Emit(event.NewEvent("dns_start", traceID, map[string]interface{}{
-			"host": host,
-		}))
-	}
+	emit(cfg.emitter, "dns_start", traceID, map[string]interface{}{
+		"host": host,
+	})
 
 	ips, err := net.DefaultResolver.LookupHost(ctx, host)
 	dnsDuration := time.Since(dnsStart).Milliseconds()
 	if err != nil {
-		if cfg.emitter != nil {
-			cfg.emitter.Emit(event.NewEvent("dns_done", traceID, map[string]interface{}{
-				"error":       err.Error(),
-				"duration_ms": dnsDuration,
-			}))
-		}
+		emit(cfg.emitter, "dns_done", traceID, map[string]interface{}{
+			"error":       err.Error(),
+			"duration_ms": dnsDuration,
+		})
 		return fmt.Errorf("DNS lookup failed: %w", err)
 	}
 
@@ -71,12 +67,10 @@ func TraceAddr(ctx context.Context, addr string, opts ...Option) error {
 	if len(ips) > 0 {
 		ip = ips[0]
 	}
-	if cfg.emitter != nil {
-		cfg.emitter.Emit(event.NewEvent("dns_done", traceID, map[string]interface{}{
-			"ip":          ip,
-			"duration_ms": dnsDuration,
-		}))
-	}
+	emit(cfg.emitter, "dns_done", traceID, map[string]interface{}{
+		"ip":          ip,
+		"duration_ms": dnsDuration,
+	})
 
 	// Open UDP connection
 	conn, err := net.Dial("udp", addr)
@@ -91,20 +85,16 @@ func TraceAddr(ctx context.Context, addr string, opts ...Option) error {
 		n, err := conn.Write([]byte(cfg.data))
 		sendDuration := time.Since(sendStart).Milliseconds()
 		if err != nil {
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("udp_send", traceID, map[string]interface{}{
-					"error":       err.Error(),
-					"duration_ms": sendDuration,
-				}))
-			}
+			emit(cfg.emitter, "udp_send", traceID, map[string]interface{}{
+				"error":       err.Error(),
+				"duration_ms": sendDuration,
+			})
 			return fmt.Errorf("UDP send failed: %w", err)
 		}
-		if cfg.emitter != nil {
-			cfg.emitter.Emit(event.NewEvent("udp_send", traceID, map[string]interface{}{
-				"bytes":       n,
-				"duration_ms": sendDuration,
-			}))
-		}
+		emit(cfg.emitter, "udp_send", traceID, map[string]interface{}{
+			"bytes":       n,
+			"duration_ms": sendDuration,
+		})
 
 		// Try to receive response
 		recvStart := time.Now()
@@ -113,19 +103,15 @@ func TraceAddr(ctx context.Context, addr string, opts ...Option) error {
 		n, err = conn.Read(buf)
 		recvDuration := time.Since(recvStart).Milliseconds()
 		if err != nil {
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("udp_receive", traceID, map[string]interface{}{
-					"error":       err.Error(),
-					"duration_ms": recvDuration,
-				}))
-			}
+			emit(cfg.emitter, "udp_receive", traceID, map[string]interface{}{
+				"error":       err.Error(),
+				"duration_ms": recvDuration,
+			})
 		} else {
-			if cfg.emitter != nil {
-				cfg.emitter.Emit(event.NewEvent("udp_receive", traceID, map[string]interface{}{
-					"bytes":       n,
-					"duration_ms": recvDuration,
-				}))
-			}
+			emit(cfg.emitter, "udp_receive", traceID, map[string]interface{}{
+				"bytes":       n,
+				"duration_ms": recvDuration,
+			})
 		}
 	}
 
@@ -177,6 +163,15 @@ func generateTraceID() string {
 		return hex.EncodeToString([]byte(fmt.Sprintf("%08x", time.Now().UnixNano())))
 	}
 	return hex.EncodeToString(b)
+}
+
+// emit is a nil-safe helper that calls em.Emit only when em is non-nil.
+// Centralising the nil-check removes one branch per call site and lowers
+// the cyclomatic complexity of TraceAddr.
+func emit(em event.Emitter, name, traceID string, data map[string]interface{}) {
+	if em != nil {
+		em.Emit(event.NewEvent(name, traceID, data))
+	}
 }
 
 func emitDryRunEvents(em event.Emitter, traceID, addr string) error {

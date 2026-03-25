@@ -23,7 +23,6 @@ type HTTPCommand struct {
 	data    string
 	headers headerFlags
 	redact  bool
-	timeout int
 }
 
 func (c *HTTPCommand) Name() string { return "http" }
@@ -53,7 +52,6 @@ func (c *HTTPCommand) Flags() *flag.FlagSet {
 	fs.StringVar(&c.data, "data", "", "Request body")
 	fs.Var(&c.headers, "H", "Add header (repeatable)")
 	fs.BoolVar(&c.redact, "redact", true, "Redact sensitive headers")
-	fs.IntVar(&c.timeout, "timeout", 0, "Request timeout in seconds (0 = use config default)")
 	return fs
 }
 
@@ -64,10 +62,6 @@ func (c *HTTPCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	url := tc.Args[0]
 
 	// Merge flags with config (flags take precedence)
-	timeout := c.timeout
-	if timeout == 0 && tc.Config != nil {
-		timeout = tc.Config.Get("timeout", 30).(int)
-	}
 	format := c.format
 	if format == "" && tc.Config != nil {
 		format = tc.Config.Get("format", "json").(string)
