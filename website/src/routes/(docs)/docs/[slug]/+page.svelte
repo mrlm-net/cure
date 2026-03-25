@@ -22,6 +22,25 @@
   onMount(() => {
     // Run Prism highlighting after mount
     Prism.highlightAll();
+
+    // Inject copy buttons into each code block
+    document.querySelectorAll('pre').forEach((pre) => {
+      const btn = document.createElement('button');
+      btn.textContent = 'Copy';
+      btn.className = 'copy-btn';
+      btn.addEventListener('click', () => {
+        const code = pre.querySelector('code');
+        if (code) {
+          navigator.clipboard.writeText(code.innerText);
+          btn.textContent = 'Copied!';
+          setTimeout(() => {
+            btn.textContent = 'Copy';
+          }, 2000);
+        }
+      });
+      pre.style.position = 'relative';
+      pre.appendChild(btn);
+    });
   });
 </script>
 
@@ -32,7 +51,7 @@
   <meta property="og:description" content={data.doc.description} />
 </svelte:head>
 
-<div class="flex gap-8">
+<div class="flex gap-12">
   <!-- Main content -->
   <article class="prose max-w-none min-w-0 flex-1">
     <!-- Breadcrumb -->
@@ -48,7 +67,7 @@
 
   <!-- Table of contents (desktop) -->
   {#if toc.length > 0}
-    <aside class="hidden w-48 shrink-0 xl:block">
+    <aside class="hidden w-56 shrink-0 2xl:block">
       <div class="sticky top-20">
         <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-[#848d97]">
           On this page
