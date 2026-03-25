@@ -1,4 +1,4 @@
-.PHONY: build test lint clean docker-build docker-push
+.PHONY: build test bench lint clean docker-build docker-push
 
 BINARY    := cure
 MODULE    := github.com/mrlm-net/cure
@@ -11,6 +11,9 @@ build:
 
 test:
 	go test -race -count=1 ./...
+
+bench:
+	go test -bench=. -benchmem -benchtime=3s ./pkg/fs/...
 
 test-coverage:
 	go test -race -coverprofile=coverage.out -coverpkg=./pkg/agent/... ./...
