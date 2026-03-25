@@ -18,7 +18,14 @@ internal/              Private application logic (not importable by other projec
 pkg/                   Public reusable libraries (importable by anyone)
   pkg/terminal/        Command routing, flag handling, help generation, execution modes
   pkg/trace/           HTTP tracing utilities
-  pkg/template/        Template generation engine
+  pkg/template/        Template generation engine with custom directory support
+  pkg/agent/           Provider-agnostic AI agent context management and session store
+  pkg/mcp/             stdlib-only MCP server (stdio and HTTP Streamable transports)
+  pkg/config/          Hierarchical configuration merging with dot-notation access
+  pkg/prompt/          Interactive terminal prompts with validation and menu support
+  pkg/fs/              Atomic filesystem operations (write, ensuredir, exists, tempdir)
+  pkg/style/           ANSI terminal styling (8 colors, 3 text styles, NO_COLOR support)
+  pkg/env/             Cached runtime environment detection (OS, arch, tools, git)
   ...                  Each package follows single responsibility principle
 ```
 

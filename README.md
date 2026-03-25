@@ -8,16 +8,17 @@
 
 Cure automates repetitive development tasks through AI context management, code generation, and network diagnostics. Manage multi-turn AI conversations from the terminal (`cure context`), generate templates for AI assistants (`CLAUDE.md`), trace HTTP/TCP/UDP connections with detailed timing and metadata, and output results in developer-friendly formats (NDJSON, HTML). Built with minimal external dependencies and only Go's standard library for core functionality, cure is designed as a foundation for developers who need reliable, auditable tooling without dependency bloat.
 
-The project is under active development — currently at v0.5.0 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
+The project is under active development — currently at v0.6.2 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
 
 ## Key Features
 
 - **AI context management** — Start, resume, list, fork, and delete multi-turn AI conversations from the terminal; sessions are persisted to `~/.local/share/cure/sessions/` and work with any registered provider
-- **Template generation** — Create `CLAUDE.md` project context files for AI assistants with interactive or flag-driven configuration
+- **Template generation** — Create `CLAUDE.md` project context files for AI assistants with interactive or flag-driven configuration; `--dry-run` prints output to stdout without writing files
 - **Network tracing** — Trace HTTP requests (DNS resolution, TLS handshake, response timing), TCP connections, and UDP packet exchanges with detailed event streams
 - **Flexible output** — Export data as NDJSON for log aggregation or HTML for visual inspection with syntax-highlighted JSON payloads
 - **Hierarchical configuration** — Merge settings from defaults, global (`~/.cure.json`), local (`.cure.json`), environment variables (`CURE_` prefix), and CLI flags with clear precedence
 - **Shell completion** — Generate bash and zsh completion scripts with dynamic command introspection
+- **Project health checks** — `cure doctor` runs 7 checks (README, tests, CI, `.gitignore`, `CLAUDE.md`, build tool, dependency manifest) and exits 1 on failure
 
 ## Installation
 
@@ -106,6 +107,13 @@ The `cure context` commands are backed by [`pkg/agent`](#pkgagent) and [`pkg/age
 ### Generation
 
 - `cure generate claude-md` — Generate `CLAUDE.md` project context file with conventions and AI assistant configuration
+- `cure generate claude-md --dry-run` — Print the generated content to stdout without writing to disk
+
+### Health checks
+
+- `cure doctor` — Run project health checks against the current working directory and print a per-check summary
+
+The doctor command runs 7 checks: README presence, test files, CI configuration, `.gitignore` (warning if absent), `CLAUDE.md`, a build tool (`Makefile` or similar), and a dependency manifest (`go.mod`, `package.json`, etc.). The command exits 0 when all checks pass or produce only warnings, and exits 1 when any check fails.
 
 ### Completion
 
@@ -120,7 +128,7 @@ Cure is built on three core principles: **zero external dependencies**, **reusab
 
 **Zero dependencies** — cure uses only Go's standard library. This eliminates supply chain risk, reduces build times, simplifies audits, and ensures cure remains buildable and maintainable for years without dependency updates. The tradeoff is implementing more functionality from scratch, but the benefits outweigh the cost for a foundational tool.
 
-**Reusable packages** — the `pkg/` directory contains independently useful libraries that any Go project can import: `pkg/terminal` for CLI routing and flag parsing, `pkg/config` for hierarchical configuration merging, `pkg/tracer` for network event tracing, `pkg/template` for embedded template rendering, `pkg/mcp` for building stdlib-only MCP (Model Context Protocol) servers with stdio and HTTP Streamable transports, and `pkg/agent` for provider-agnostic AI agent context management. Each package follows a single responsibility and can be used without importing cure's application logic.
+**Reusable packages** — the `pkg/` directory contains independently useful libraries that any Go project can import: `pkg/terminal` for CLI routing and flag parsing, `pkg/config` for hierarchical configuration merging, `pkg/tracer` for network event tracing, `pkg/template` for embedded template rendering, `pkg/mcp` for building stdlib-only MCP (Model Context Protocol) servers with stdio and HTTP Streamable transports, `pkg/agent` for provider-agnostic AI agent context management, `pkg/prompt` for interactive terminal prompts, `pkg/fs` for atomic filesystem operations, `pkg/style` for ANSI terminal styling with NO_COLOR support, and `pkg/env` for cached runtime environment detection. Each package follows a single responsibility and can be used without importing cure's application logic.
 
 **Minimal abstraction** — cure favors composition over complex abstractions. Commands implement a simple interface (`Name()`, `Description()`, `Usage()`, `Flags()`, `Run()`), configuration is plain `map[string]interface{}` with dot-notation access, and the router dispatches commands without heavy middleware stacks. This keeps the codebase readable and debuggable.
 
@@ -533,6 +541,127 @@ n := agent.EstimateTokens(text) // len(text) / 4
 
 For precise counts, use `Agent.CountTokens`. If the provider does not support it, `ErrCountNotSupported` is returned.
 
+## pkg/prompt
+
+`pkg/prompt` provides interactive terminal prompts with validation. The `Prompter` struct wraps an `io.Writer` and `io.Reader` pair so all input and output can be redirected — enabling fully testable prompts without a real terminal.
+
+Import path: `github.com/mrlm-net/cure/pkg/prompt`
+
+```go
+import (
+    "os"
+    "github.com/mrlm-net/cure/pkg/prompt"
+)
+
+p := prompt.NewPrompter(os.Stdout, os.Stdin)
+
+// Required — repeats until the user provides a non-empty value.
+// Pressing Enter with a default returns the default.
+name, err := p.Required("Project name", "my-project")
+
+// Confirm — accepts y/yes/n/no (case-insensitive).
+ok, err := p.Confirm("Overwrite existing file?")
+
+// MultiSelect — accepts comma-separated numbers, "all", or "none".
+opts := []prompt.Option{
+    {Label: "Logging", Value: "logging"},
+    {Label: "Metrics", Value: "metrics"},
+    {Label: "Tracing", Value: "tracing"},
+}
+selected, err := p.MultiSelect("Select features", opts)
+```
+
+`IsInteractive(stdin)` reports whether the reader is a real terminal. Use it to bypass prompts in CI or piped contexts:
+
+```go
+if !prompt.IsInteractive(os.Stdin) {
+    // non-interactive: use defaults or flags
+}
+```
+
+## pkg/fs
+
+`pkg/fs` provides safe filesystem operations for CLI tools. The key primitive is `AtomicWrite`, which uses a write-then-rename sequence (create temp file → fsync → rename) so concurrent readers always observe either the old content or the new content, never a partial write.
+
+Import path: `github.com/mrlm-net/cure/pkg/fs`
+
+```go
+import "github.com/mrlm-net/cure/pkg/fs"
+
+// Write a config file atomically (create temp, fsync, rename).
+err := fs.AtomicWrite("/etc/app/config.json", data, 0o600)
+
+// Create a directory hierarchy; no-op if it already exists.
+err = fs.EnsureDir("~/.local/share/myapp/cache", 0o700)
+
+// Check existence without treating absence as an error.
+exists, err := fs.Exists("/var/run/app.pid")
+
+// Create a temporary directory; caller removes it when done.
+dir, err := fs.TempDir("myapp-build-")
+defer os.RemoveAll(dir)
+```
+
+`AtomicWrite` inherits permissions from the existing target file so a rewrite does not silently change access rights. The temp file is always created in the same directory as the target to guarantee same-filesystem rename semantics on POSIX.
+
+## pkg/style
+
+`pkg/style` provides minimal ANSI terminal styling with NO_COLOR support. All functions are standalone — there is no struct to initialise. Styling is enabled by default and automatically disabled when the `NO_COLOR` environment variable is set at program startup (see [no-color.org](https://no-color.org)).
+
+Import path: `github.com/mrlm-net/cure/pkg/style`
+
+```go
+import "github.com/mrlm-net/cure/pkg/style"
+
+// 8 foreground colors
+fmt.Println(style.Red("error"))
+fmt.Println(style.Green("ok"))
+fmt.Println(style.Yellow("warning"))
+fmt.Println(style.Blue("info"))
+
+// 3 text styles
+fmt.Println(style.Bold("heading"))
+fmt.Println(style.Dim("secondary"))
+fmt.Println(style.Underline("link"))
+
+// Compose by nesting; the extra reset code is harmless
+label := style.Bold(style.Red("FAIL"))
+
+// Strip ANSI codes — useful for log files or display-width calculations
+plain := style.Reset(label) // "FAIL"
+
+// Runtime control
+style.Disable() // turn off for this process
+style.Enable()  // turn back on
+```
+
+## pkg/env
+
+`pkg/env` detects the current runtime environment — OS, architecture, shell, Go/Git versions, and working directory. `Detect()` computes these values once using `sync.Once` and caches them; all subsequent calls return the cached struct without re-running any subprocesses.
+
+Import path: `github.com/mrlm-net/cure/pkg/env`
+
+```go
+import "github.com/mrlm-net/cure/pkg/env"
+
+e := env.Detect()
+fmt.Println(e.OS)         // e.g. "darwin"
+fmt.Println(e.Arch)       // e.g. "arm64"
+fmt.Println(e.GoVersion)  // e.g. "go1.25.0"
+fmt.Println(e.GitVersion) // e.g. "git version 2.39.0"
+fmt.Println(e.WorkDir)    // e.g. "/Users/user/project"
+
+// Check whether an external tool is available on PATH.
+if env.HasTool("docker") {
+    // docker is available
+}
+
+// Check whether the current directory is inside a git repository.
+if env.IsGitRepo() {
+    // inside a git repository
+}
+```
+
 ## Development
 
 ### Prerequisites
@@ -578,12 +707,18 @@ For detailed guidance, see `CLAUDE.md` in the repository root.
 
 ## Roadmap
 
-Cure is currently at v0.5.0. The v0.5.0 release delivered `pkg/agent` — provider-agnostic AI agent context management — along with the `cure context` command group and the Anthropic Claude adapter.
+Cure is currently at v0.6.2. The v0.6.x series delivered the developer experience foundation: `pkg/prompt`, `pkg/fs`, `pkg/style`, and `pkg/env` as standalone reusable packages; the `cure doctor` command with 7 health checks; `--dry-run` for `cure generate claude-md`; and custom template directory support in `pkg/template`.
+
+Earlier milestones:
+
+- **v0.5.0** — `pkg/agent`: provider-agnostic AI agent context management, `cure context` command group, Anthropic Claude adapter
+- **v0.4.x** — `pkg/mcp` for stdlib-only MCP server implementation, shell auto-completion
+- **v0.1.0–v0.3.x** — CLI framework (`pkg/terminal`), configuration (`pkg/config`), network tracing (`pkg/tracer`), template generation (`pkg/template`)
 
 Upcoming milestones:
 
-- **v0.6.0** — Foundation packages for developer experience: `pkg/prompt` for interactive prompts, `pkg/fs` for filesystem operations, `pkg/style` for terminal styling, and `pkg/env` for environment inspection; `cure doctor` command; `--dry-run` support across commands
-- **v0.7.0+** — Expanded template generation (template directories, multi-file generation), additional AI provider adapters, and plugin architecture exploration
+- **v0.7.0** — Expanded template generation (multi-file templates, template inheritance), additional AI provider adapters
+- **v0.8.0+** — `cure init` for project bootstrapping, plugin architecture exploration
 
 The v1.0.0 milestone marks API stability for `pkg/` packages and freeze of breaking changes. Track progress on the [GitHub Projects board](https://github.com/orgs/mrlm-net/projects/9).
 
