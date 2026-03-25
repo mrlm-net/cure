@@ -37,3 +37,7 @@ bin/
 .claude/*.md
 .claude/*.txt
 .claude/*.json
+# Website build artifacts
+website/build/
+website/.svelte-kit/
+website/node_modules/
