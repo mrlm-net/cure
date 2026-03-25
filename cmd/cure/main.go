@@ -13,6 +13,7 @@ import (
 	"github.com/mrlm-net/cure/internal/commands/trace"
 	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
 	"github.com/mrlm-net/cure/pkg/config"
+	"github.com/mrlm-net/cure/pkg/template"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
@@ -26,6 +27,7 @@ func main() {
 func run(args []string) error {
 	// Load config with precedence: defaults → global → local → env
 	cfg := loadConfig()
+	template.SetConfig(cfg) // wire custom template directories
 
 	// Initialise the session store for the context command group.
 	storeDir, err := ctxcmd.DefaultStoreDir()
