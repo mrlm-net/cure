@@ -9,6 +9,7 @@ import (
 	"github.com/mrlm-net/cure/internal/commands"
 	"github.com/mrlm-net/cure/internal/commands/completion"
 	ctxcmd "github.com/mrlm-net/cure/internal/commands/context"
+	"github.com/mrlm-net/cure/internal/commands/doctor"
 	"github.com/mrlm-net/cure/internal/commands/generate"
 	"github.com/mrlm-net/cure/internal/commands/trace"
 	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
@@ -41,6 +42,7 @@ func run(args []string) error {
 	router.Register(commands.NewVersionCommand())
 	router.Register(terminal.NewHelpCommand(router))
 	router.Register(trace.NewTraceCommand())
+	router.Register(doctor.NewDoctorCommand())
 	router.Register(generate.NewGenerateCommand())
 	// Register context command BEFORE completion so it is included in completions.
 	router.Register(ctxcmd.NewContextCommand(sessionStore))
