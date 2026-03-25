@@ -171,6 +171,218 @@ func TestClaudeMDCommand_Interactive(t *testing.T) {
 	t.Skip("Interactive stdin testing is unreliable in unit tests - covered by Prompter tests and E2E")
 }
 
+func TestClaudeMDCommand_DryRun(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "CLAUDE.md")
+
+	tests := []struct {
+		name        string
+		args        []string
+		wantErr     bool
+		checkOutput func(t *testing.T, stdout string)
+		checkNoFile bool
+	}{
+		{
+			name: "dry-run prints header and content, no file written",
+			args: []string{
+				"--non-interactive",
+				"--dry-run",
+				"--name", "myapp",
+				"--description", "A test app",
+				"--language", "go",
+				"--output", outputPath,
+			},
+			wantErr:     false,
+			checkNoFile: true,
+			checkOutput: func(t *testing.T, stdout string) {
+				if !strings.Contains(stdout, "# Dry run mode: would write to") {
+					t.Error("Dry-run output missing header line")
+				}
+				if !strings.Contains(stdout, outputPath) {
+					t.Errorf("Dry-run header missing output path %q", outputPath)
+				}
+				if !strings.Contains(stdout, "# myapp") {
+					t.Error("Dry-run output missing project name")
+				}
+				if !strings.Contains(stdout, "A test app") {
+					t.Error("Dry-run output missing description")
+				}
+				if !strings.Contains(stdout, "- **Language**: go") {
+					t.Error("Dry-run output missing language")
+				}
+			},
+		},
+		{
+			name: "dry-run with conventions renders them without writing",
+			args: []string{
+				"--non-interactive",
+				"--dry-run",
+				"--name", "cure",
+				"--description", "Go CLI for dev automation",
+				"--language", "go",
+				"--build-tool", "make",
+				"--conventions", "gofmt,go vet",
+				"--output", outputPath,
+			},
+			wantErr:     false,
+			checkNoFile: true,
+			checkOutput: func(t *testing.T, stdout string) {
+				if !strings.Contains(stdout, "# Dry run mode: would write to") {
+					t.Error("Dry-run output missing header line")
+				}
+				if !strings.Contains(stdout, "- gofmt") {
+					t.Error("Dry-run output missing convention: gofmt")
+				}
+				if !strings.Contains(stdout, "- go vet") {
+					t.Error("Dry-run output missing convention: go vet")
+				}
+				if !strings.Contains(stdout, "- **Build tool**: make") {
+					t.Error("Dry-run output missing build tool")
+				}
+			},
+		},
+		{
+			name: "dry-run with missing required flag still errors",
+			args: []string{
+				"--non-interactive",
+				"--dry-run",
+				"--name", "myapp",
+				// missing --description and --language
+				"--output", outputPath,
+			},
+			wantErr:     true,
+			checkNoFile: true,
+		},
+		{
+			name: "dry-run does not overwrite existing file",
+			args: []string{
+				"--non-interactive",
+				"--dry-run",
+				"--name", "myapp",
+				"--description", "A test app",
+				"--language", "go",
+				"--output", outputPath,
+			},
+			wantErr:     false,
+			checkNoFile: false, // file pre-exists; we verify its content is unchanged
+			checkOutput: func(t *testing.T, stdout string) {
+				if !strings.Contains(stdout, "# Dry run mode: would write to") {
+					t.Error("Dry-run output missing header line")
+				}
+			},
+		},
+		{
+			name: "dry-run default output path appears in header",
+			args: []string{
+				"--non-interactive",
+				"--dry-run",
+				"--name", "myapp",
+				"--description", "A test app",
+				"--language", "go",
+				// no --output: defaults to ./CLAUDE.md
+			},
+			wantErr:     false,
+			checkNoFile: false, // not checking tmp dir; just checking stdout
+			checkOutput: func(t *testing.T, stdout string) {
+				if !strings.Contains(stdout, "# Dry run mode: would write to ./CLAUDE.md") {
+					t.Errorf("Dry-run header should show default path; got stdout:\n%s", stdout)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Pre-create the file for the "does not overwrite" test case
+			if tt.name == "dry-run does not overwrite existing file" {
+				if err := os.WriteFile(outputPath, []byte("sentinel content"), 0644); err != nil {
+					t.Fatalf("Failed to create sentinel file: %v", err)
+				}
+			} else {
+				os.Remove(outputPath)
+			}
+
+			// Create and configure command
+			cmd := &ClaudeMDCommand{}
+			fs := cmd.Flags()
+			if err := fs.Parse(tt.args); err != nil {
+				t.Fatalf("Failed to parse flags: %v", err)
+			}
+
+			// Inject I/O
+			var stdout, stderr bytes.Buffer
+			tc := &terminal.Context{
+				Stdout: &stdout,
+				Stderr: &stderr,
+				Config: nil,
+			}
+
+			// Run
+			err := cmd.Run(context.Background(), tc)
+
+			// Check error expectation
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Run() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			// Check that no file was written when checkNoFile is true
+			if tt.checkNoFile {
+				if _, statErr := os.Stat(outputPath); !os.IsNotExist(statErr) {
+					t.Error("Dry-run wrote a file to disk — it must not")
+				}
+			}
+
+			// Check that pre-existing file content is unchanged in overwrite test
+			if tt.name == "dry-run does not overwrite existing file" && !tt.wantErr {
+				content, readErr := os.ReadFile(outputPath)
+				if readErr != nil {
+					t.Fatalf("Failed to read sentinel file: %v", readErr)
+				}
+				if string(content) != "sentinel content" {
+					t.Errorf("Dry-run modified existing file; content = %q", string(content))
+				}
+			}
+
+			// Validate stdout
+			if !tt.wantErr && tt.checkOutput != nil {
+				tt.checkOutput(t, stdout.String())
+			}
+		})
+	}
+}
+
+func BenchmarkClaudeMDCommand_DryRun(b *testing.B) {
+	var stdout, stderr bytes.Buffer
+	tc := &terminal.Context{
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Config: nil,
+	}
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		stdout.Reset()
+		stderr.Reset()
+
+		cmd := &ClaudeMDCommand{}
+		fs := cmd.Flags()
+		_ = fs.Parse([]string{
+			"--non-interactive",
+			"--dry-run",
+			"--name", "benchapp",
+			"--description", "Benchmark application",
+			"--language", "go",
+			"--build-tool", "make",
+			"--conventions", "gofmt,go vet",
+		})
+
+		if err := cmd.Run(context.Background(), tc); err != nil {
+			b.Fatalf("Run() error: %v", err)
+		}
+	}
+}
+
 func TestClaudeMDCommand_OverwriteProtection(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "CLAUDE.md")
