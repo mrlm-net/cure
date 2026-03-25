@@ -17,6 +17,7 @@ type ClaudeMDCommand struct {
 	// Flags
 	nonInteractive bool
 	force          bool
+	dryRun         bool
 	outputPath     string
 
 	// Field values (from flags or prompts)
@@ -49,6 +50,7 @@ Non-interactive mode (for CI/CD):
 
 Flags:
   --non-interactive   Disable prompts, require all values via flags
+  --dry-run           Preview generated output without writing to disk
   --name              Project name (required in non-interactive)
   --description       Short description (required in non-interactive)
   --language          Primary language (required in non-interactive)
@@ -68,6 +70,13 @@ Examples:
     --description "Go CLI for dev automation" \
     --language go
 
+  # Preview output without writing to disk
+  cure generate claude-md --non-interactive \
+    --name cure \
+    --description "Go CLI for dev automation" \
+    --language go \
+    --dry-run
+
   # Custom output path
   cure generate claude-md --output docs/CLAUDE.md
 `
@@ -77,6 +86,7 @@ func (c *ClaudeMDCommand) Flags() *flag.FlagSet {
 	fs := flag.NewFlagSet("claude-md", flag.ContinueOnError)
 	fs.BoolVar(&c.nonInteractive, "non-interactive", false, "Disable prompts, require all values via flags")
 	fs.BoolVar(&c.force, "force", false, "Overwrite existing file without prompting")
+	fs.BoolVar(&c.dryRun, "dry-run", false, "Preview output without writing file")
 	fs.StringVar(&c.outputPath, "output", "./CLAUDE.md", "Output file path")
 	fs.StringVar(&c.name, "name", "", "Project name")
 	fs.StringVar(&c.description, "description", "", "Project description")
@@ -91,13 +101,8 @@ func (c *ClaudeMDCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	// Load defaults from config if available
 	c.loadDefaults(tc)
 
-	// Gather input (prompts or validate flags)
+	// Gather input (prompts or validate flags); validation errors still surface in dry-run
 	if err := c.gatherInput(tc); err != nil {
-		return err
-	}
-
-	// Check if output file exists
-	if err := c.checkOverwrite(tc); err != nil {
 		return err
 	}
 
@@ -106,6 +111,18 @@ func (c *ClaudeMDCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	output, err := template.Render("claude-md", data)
 	if err != nil {
 		return fmt.Errorf("failed to render template: %w", err)
+	}
+
+	// Dry-run: print rendered content to stdout and return without writing
+	if c.dryRun {
+		fmt.Fprintf(tc.Stdout, "# Dry run mode: would write to %s\n\n", c.outputPath)
+		fmt.Fprintln(tc.Stdout, output)
+		return nil
+	}
+
+	// Check if output file exists (skipped in dry-run — no file will be written)
+	if err := c.checkOverwrite(tc); err != nil {
+		return err
 	}
 
 	// Write to file
