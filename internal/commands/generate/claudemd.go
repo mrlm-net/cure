@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mrlm-net/cure/pkg/fs"
+	"github.com/mrlm-net/cure/pkg/prompt"
 	"github.com/mrlm-net/cure/pkg/template"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
@@ -83,18 +85,18 @@ Examples:
 }
 
 func (c *ClaudeMDCommand) Flags() *flag.FlagSet {
-	fs := flag.NewFlagSet("claude-md", flag.ContinueOnError)
-	fs.BoolVar(&c.nonInteractive, "non-interactive", false, "Disable prompts, require all values via flags")
-	fs.BoolVar(&c.force, "force", false, "Overwrite existing file without prompting")
-	fs.BoolVar(&c.dryRun, "dry-run", false, "Preview output without writing file")
-	fs.StringVar(&c.outputPath, "output", "./CLAUDE.md", "Output file path")
-	fs.StringVar(&c.name, "name", "", "Project name")
-	fs.StringVar(&c.description, "description", "", "Project description")
-	fs.StringVar(&c.language, "language", "", "Primary programming language")
-	fs.StringVar(&c.buildTool, "build-tool", "", "Build tool (e.g., make, npm, cargo)")
-	fs.StringVar(&c.testFramework, "test-framework", "", "Test framework")
-	fs.StringVar(&c.conventions, "conventions", "", "Comma-separated key conventions")
-	return fs
+	fset := flag.NewFlagSet("claude-md", flag.ContinueOnError)
+	fset.BoolVar(&c.nonInteractive, "non-interactive", false, "Disable prompts, require all values via flags")
+	fset.BoolVar(&c.force, "force", false, "Overwrite existing file without prompting")
+	fset.BoolVar(&c.dryRun, "dry-run", false, "Preview output without writing file")
+	fset.StringVar(&c.outputPath, "output", "./CLAUDE.md", "Output file path")
+	fset.StringVar(&c.name, "name", "", "Project name")
+	fset.StringVar(&c.description, "description", "", "Project description")
+	fset.StringVar(&c.language, "language", "", "Primary programming language")
+	fset.StringVar(&c.buildTool, "build-tool", "", "Build tool (e.g., make, npm, cargo)")
+	fset.StringVar(&c.testFramework, "test-framework", "", "Test framework")
+	fset.StringVar(&c.conventions, "conventions", "", "Comma-separated key conventions")
+	return fset
 }
 
 func (c *ClaudeMDCommand) Run(ctx context.Context, tc *terminal.Context) error {
@@ -126,7 +128,7 @@ func (c *ClaudeMDCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	}
 
 	// Write to file
-	if err := os.WriteFile(c.outputPath, []byte(output), 0644); err != nil {
+	if err := fs.AtomicWrite(c.outputPath, []byte(output), 0644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", c.outputPath, err)
 	}
 
@@ -202,7 +204,7 @@ func (c *ClaudeMDCommand) validateFlags() error {
 
 // promptUser runs interactive prompts to gather input.
 func (c *ClaudeMDCommand) promptUser(tc *terminal.Context) error {
-	prompter := NewPrompter(tc.Stdout, os.Stdin)
+	prompter := prompt.NewPrompter(tc.Stdout, os.Stdin)
 
 	var err error
 	c.name, err = prompter.Required("What is the project name?", c.name)
@@ -265,7 +267,11 @@ func (c *ClaudeMDCommand) defaultTestFramework() string {
 
 // checkOverwrite checks if output file exists and prompts for confirmation.
 func (c *ClaudeMDCommand) checkOverwrite(tc *terminal.Context) error {
-	if _, err := os.Stat(c.outputPath); os.IsNotExist(err) {
+	exists, err := fs.Exists(c.outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to check if %s exists: %w", c.outputPath, err)
+	}
+	if !exists {
 		return nil // File doesn't exist, safe to write
 	}
 
@@ -278,7 +284,7 @@ func (c *ClaudeMDCommand) checkOverwrite(tc *terminal.Context) error {
 	}
 
 	// Interactive: prompt for confirmation
-	prompter := NewPrompter(tc.Stdout, os.Stdin)
+	prompter := prompt.NewPrompter(tc.Stdout, os.Stdin)
 	confirm, err := prompter.Confirm(fmt.Sprintf("%s already exists. Overwrite?", c.outputPath))
 	if err != nil {
 		return err
