@@ -1,5 +1,9 @@
 import { error } from '@sveltejs/kit';
-import { compile } from 'mdsvex';
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkRehype from 'remark-rehype';
+import rehypeRaw from 'rehype-raw';
+import rehypeStringify from 'rehype-stringify';
 import { getAllDocSlugs, getDocBySlug } from '$lib/content/pipeline.server.js';
 import rehypeSlug from '$lib/plugins/rehype-slug.js';
 import rehypeRewriteLinks from '$lib/plugins/rehype-rewrite-links.js';
@@ -12,6 +16,14 @@ export async function entries() {
   return slugs.map((slug) => ({ slug }));
 }
 
+const processor = unified()
+  .use(remarkParse)
+  .use(remarkRehype, { allowDangerousHtml: true })
+  .use(rehypeRaw)
+  .use(rehypeSlug)
+  .use(rehypeRewriteLinks)
+  .use(rehypeStringify);
+
 export async function load({ params }): Promise<{ doc: DocPage; html: string }> {
   const doc = getDocBySlug(params.slug);
 
@@ -19,29 +31,7 @@ export async function load({ params }): Promise<{ doc: DocPage; html: string }> 
     throw error(404, `Documentation page "${params.slug}" not found`);
   }
 
-  // Compile markdown to HTML via mdsvex
-  const compiled = await compile(doc.content, {
-    rehypePlugins: [rehypeSlug, rehypeRewriteLinks]
-  });
+  const html = String(await processor.process(doc.content));
 
-  const html = compiled?.code ?? '';
-
-  // Strip mdsvex module script wrappers — extract the inner HTML
-  // mdsvex wraps output in <script context="module"> and component code;
-  // for SSG we just need the rendered HTML portion
-  const htmlContent = extractHtml(html);
-
-  return { doc, html: htmlContent };
-}
-
-/**
- * Extract the rendered HTML from mdsvex compiled output.
- * mdsvex produces Svelte component code; we strip script and style blocks
- * to get the pure HTML template content.
- */
-function extractHtml(code: string): string {
-  return code
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .trim();
+  return { doc, html };
 }
