@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-03-25
+
+### Changed
+
+- `internal/commands/generate`: migrated from internal `Prompter` struct to `pkg/prompt.NewPrompter`; migrated from `os.WriteFile` to `pkg/fs.AtomicWrite` and `pkg/fs.Exists` — deleted `internal/commands/generate/prompt.go` and `prompt_test.go` (308 lines removed)
+
+### Added
+
+- `pkg/prompt`, `pkg/fs`, `pkg/style`, `pkg/env`: added `example_test.go` with runnable `Example*` functions for Go documentation and test coverage
+- `CLAUDE.md`: expanded architecture diagram with all current `pkg/` packages
+- `README.md`: added sections for `pkg/prompt`, `pkg/fs`, `pkg/style`, `pkg/env`; documented `cure doctor` and `--dry-run` flag; updated roadmap to reflect v0.6.x releases
+
 ## [0.6.1] - 2026-03-25
 
 ### Added
@@ -158,7 +170,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cmd/cure/main.go` — thin entry point wiring the terminal router
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
-[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/mrlm-net/cure/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/mrlm-net/cure/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/mrlm-net/cure/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mrlm-net/cure/compare/v0.4.1...v0.5.0
