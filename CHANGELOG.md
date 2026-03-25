@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-25
+
+### Added
+
+- `pkg/prompt` — interactive terminal input with `Prompter` struct injecting `io.Writer`/`io.Reader` for full testability
+- `pkg/prompt`: `Required(prompt, default)` — repeats until non-empty; returns default on Enter
+- `pkg/prompt`: `Optional(prompt, default)` — returns default on Enter; never repeats
+- `pkg/prompt`: `Confirm(prompt)` — accepts y/yes/n/no case-insensitively; repeats on invalid input
+- `pkg/prompt`: `SingleSelect(prompt, options)` — numbered 1-based menu; re-prompts on invalid selection
+- `pkg/prompt`: `MultiSelect(prompt, options)` — comma-separated numbers, "all", or "none"; preserves original option order; deduplicates
+- `pkg/prompt`: `IsInteractive(stdin)` — detects terminal via `*os.File` + `os.ModeCharDevice`; no syscall imports
+- `pkg/fs` — crash-safe filesystem operations with atomic write semantics
+- `pkg/fs`: `AtomicWrite(path, content, perm)` — temp file in same directory → fsync → atomic rename; preserves existing file permissions; cleans up temp on error
+- `pkg/fs`: `EnsureDir(path, perm)` — `os.MkdirAll` wrapper; returns error if path exists and is not a directory
+- `pkg/fs`: `Exists(path)` — stat wrapper returning `(bool, error)`; error only for permission/I/O failures
+- `pkg/fs`: `TempDir(prefix)` — `os.MkdirTemp` wrapper returning the created path
+- `pkg/fs`: `SetPermissions(path, mode)` — `os.Chmod` wrapper
+- `pkg/style` — minimal ANSI terminal styling (~92 lines); standalone functions per ADR-001
+- `pkg/style`: 8 foreground color functions: `Red`, `Green`, `Yellow`, `Blue`, `Magenta`, `Cyan`, `White`, `Gray`
+- `pkg/style`: 3 text style functions: `Bold`, `Dim`, `Underline`
+- `pkg/style`: `Reset(text)` — strips all ANSI escape sequences via compiled regexp
+- `pkg/style`: `Enabled()`, `Disable()`, `Enable()` — runtime toggle; `NO_COLOR` env var disables styling at startup
+- `pkg/env` — runtime environment detection with cached singleton per ADR-004
+- `pkg/env`: `Environment` struct with `OS`, `Arch`, `Shell`, `GoVersion`, `GitVersion`, `WorkDir` fields
+- `pkg/env`: `Detect()` — `sync.Once`-cached detection; ~7 ns/op on subsequent calls
+- `pkg/env`: `HasTool(name)` — `exec.LookPath` wrapper returning bool; intentionally uncached
+- `pkg/env`: `IsGitRepo()` — walks directory tree looking for `.git`; no git binary invocation
+
+### Fixed
+
+- `pkg/tracer/http`, `pkg/tracer/tcp`, `pkg/tracer/udp`: extracted nil-safe `emit()` helper eliminating repeated `if cfg.emitter != nil` guard branches; reduces cyclomatic complexity of `TraceURL` (19→11) and `TraceAddr` tcp (22→11), udp (17→10)
+- `internal/commands/trace/http`: removed dead `timeout` variable that was computed but never passed to `http.TraceURL` (ineffassign)
+- `pkg/terminal/errors_test.go`: split intentional misspelling literals in `BenchmarkLevenshtein` with string concatenation to suppress misspell linter false positives
+
 ## [0.5.0] - 2026-03-24
 
 ### Added
@@ -114,7 +148,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cmd/cure/main.go` — thin entry point wiring the terminal router
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
-[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/mrlm-net/cure/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/mrlm-net/cure/compare/v0.4.1...v0.5.0
 [0.3.0]: https://github.com/mrlm-net/cure/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mrlm-net/cure/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mrlm-net/cure/releases/tag/v0.1.0
