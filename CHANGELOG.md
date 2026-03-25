@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-03-25
+
+### Added
+
+- `cure doctor` — project health check command; runs 7 checks (README, tests, CI, .gitignore, CLAUDE.md, build tool, dependency manifest) and prints pass/warn/fail per check with an exit code of 1 on any failure
+- `cure doctor`: `CheckFunc` type — `func() CheckResult`; follows `http.HandlerFunc` pattern for extensible, composable checks
+- `pkg/template`: `SetConfig(cfg)` — injects `*config.Config` into the template registry; triggers lazy rebuild on next use
+- `pkg/template`: custom template directories — 4-level search order: embedded → config-defined dirs → `~/.cure/templates/` → `.cure/templates/`; silently skips missing directories
+- `cure generate claude-md --dry-run` — prints the generated output to stdout instead of writing to disk; exits 0 without touching the filesystem
+
 ## [0.6.0] - 2026-03-25
 
 ### Added
@@ -148,7 +158,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cmd/cure/main.go` — thin entry point wiring the terminal router
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
-[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/mrlm-net/cure/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/mrlm-net/cure/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mrlm-net/cure/compare/v0.4.1...v0.5.0
 [0.3.0]: https://github.com/mrlm-net/cure/compare/v0.2.0...v0.3.0
