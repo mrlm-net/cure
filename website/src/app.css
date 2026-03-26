@@ -218,6 +218,15 @@ body {
   color: #ffa657;
 }
 
+/* Home page shiki code block — strip background, add padding */
+.hp-code pre.shiki {
+  background: transparent !important;
+  padding: 1rem;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
 /* Copy button for code blocks */
 .copy-btn {
   position: absolute;

@@ -21,50 +21,32 @@
 <header
   class="fixed top-0 left-0 right-0 z-50 h-14 border-b border-[#30363d] bg-[#0d1117]/95 backdrop-blur-sm"
 >
-  <div class="flex h-full items-center justify-between px-4 md:px-8">
-    <!-- Logo / site title -->
-    <div class="flex items-center gap-3">
-      <!-- Mobile menu button -->
-      <button
-        type="button"
-        class="mr-1 rounded-md p-1.5 text-[#9198a1] hover:bg-[#161b22] hover:text-[#e6edf3] md:hidden"
-        onclick={onMenuToggle}
-        aria-label="Toggle navigation menu"
+  <div class="flex h-full items-center gap-3 px-4">
+    <!-- Logo — starts at px-4, aligned with sidebar items -->
+    <a
+      href="{base}/"
+      class="flex items-center gap-2 font-semibold text-[#e6edf3] hover:text-white"
+    >
+      <svg
+        class="h-6 w-6 text-[#58a6ff]"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
       >
-        <svg
-          class="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"
+        />
+      </svg>
+      <span>{siteConfig.title}</span>
+    </a>
 
-      <a
-        href="{base}/"
-        class="flex items-center gap-2 font-semibold text-[#e6edf3] hover:text-white"
-      >
-        <!-- Cure logo / icon -->
-        <svg
-          class="h-6 w-6 text-[#58a6ff]"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"
-          />
-        </svg>
-        <span>{siteConfig.title}</span>
-      </a>
-    </div>
+    <!-- Spacer -->
+    <div class="flex-1"></div>
 
-    <!-- Top nav links -->
+    <!-- Top nav links (desktop only) -->
     <nav class="hidden items-center gap-1 md:flex">
       {#each topNavLinks as link}
         <a
@@ -92,5 +74,17 @@
         />
       </svg>
     </a>
+
+    <!-- Mobile hamburger — right side so logo stays at px-4 baseline -->
+    <button
+      type="button"
+      class="rounded-md p-1.5 text-[#9198a1] hover:bg-[#161b22] hover:text-[#e6edf3] md:hidden"
+      onclick={onMenuToggle}
+      aria-label="Toggle navigation menu"
+    >
+      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
   </div>
 </header>

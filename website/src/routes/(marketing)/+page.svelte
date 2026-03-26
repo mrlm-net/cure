@@ -1,6 +1,12 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { siteConfig } from '$lib/config/site.js';
+
+  interface Props {
+    data: { codeHtml: string };
+  }
+
+  let { data }: Props = $props();
 </script>
 
 <svelte:head>
@@ -216,7 +222,7 @@
         </div>
       </div>
 
-      <!-- Code block -->
+      <!-- Code block — highlighted server-side via shiki -->
       <div class="rounded-xl border border-[#30363d] bg-[#0d1117] p-1">
         <div class="flex items-center gap-2 border-b border-[#30363d] px-4 py-2.5">
           <div class="flex gap-1.5">
@@ -226,26 +232,9 @@
           </div>
           <span class="ml-2 text-xs text-[#848d97]">terminal</span>
         </div>
-        <div class="overflow-x-auto p-4">
-          <pre class="font-mono text-sm leading-relaxed"><code
-><span class="text-[#848d97]"># Start a new session</span>
-<span class="text-[#3fb950]">$</span> <span class="text-[#e6edf3]">cure context new \</span>
-    <span class="text-[#e6edf3]">--provider claude \</span>
-    <span class="text-[#e6edf3]">--message "Summarise Go 1.25 release notes"</span>
-
-<span class="text-[#9198a1]">Go 1.25 introduces several improvements...</span>
-<span class="text-[#9198a1]">session saved: a3f2c1d0e4b5...</span>
-
-<span class="text-[#848d97]"># Resume and continue</span>
-<span class="text-[#3fb950]">$</span> <span class="text-[#e6edf3]">cure context resume a3f2c1d0e4b5 \</span>
-    <span class="text-[#e6edf3]">--message "Which change is most impactful?"</span>
-
-<span class="text-[#848d97]"># List all sessions</span>
-<span class="text-[#3fb950]">$</span> <span class="text-[#e6edf3]">cure context list</span>
-
-<span class="text-[#848d97]"># Fork and explore a branch</span>
-<span class="text-[#3fb950]">$</span> <span class="text-[#e6edf3]">cure context fork a3f2c1d0e4b5</span>
-</code></pre>
+        <div class="hp-code overflow-x-auto">
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          {@html data.codeHtml}
         </div>
       </div>
     </div>
