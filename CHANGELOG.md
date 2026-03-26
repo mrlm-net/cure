@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-03-26
+
+### Added
+
+- `cure generate agents-md` — generates `AGENTS.md` (cross-tool standard; adopted by GitHub Copilot, Cursor, Devin, Gemini CLI, OpenAI Codex)
+- `cure generate copilot-instructions` — generates `.github/copilot-instructions.md` with YAML frontmatter (`applyTo: "**"`); creates `.github/` directory automatically
+- `cure generate cursor-rules` — generates `.cursor/rules/project.mdc` with YAML frontmatter (`alwaysApply: true`); creates `.cursor/rules/` directory automatically
+- `cure generate windsurf-rules` — generates `.windsurfrules` (plain text, Windsurf-style numbered rules)
+- `cure generate gemini-md` — generates `GEMINI.md` (Google Gemini CLI auto-discovery format)
+- All new subcommands support `--dry-run`, `--force`, `--output`, `--non-interactive`, and the same prompt flags as `cure generate claude-md`
+
 ## [0.6.2] - 2026-03-25
 
 ### Changed
@@ -170,7 +181,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cmd/cure/main.go` — thin entry point wiring the terminal router
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
-[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/mrlm-net/cure/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/mrlm-net/cure/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/mrlm-net/cure/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/mrlm-net/cure/compare/v0.5.0...v0.6.0
