@@ -102,10 +102,14 @@ body {
 }
 
 .prose pre {
-  background-color: var(--color-bg-secondary) !important;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   overflow-x: auto;
+}
+
+/* Shiki code blocks — preserve border/radius but allow shiki's background */
+.prose pre.shiki {
+  padding: 1rem;
 }
 
 .prose pre code {

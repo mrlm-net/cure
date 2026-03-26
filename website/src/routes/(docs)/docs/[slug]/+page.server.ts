@@ -3,6 +3,7 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
+import rehypeShiki from '@shikijs/rehype';
 import rehypeStringify from 'rehype-stringify';
 import { getAllDocSlugs, getDocBySlug } from '$lib/content/pipeline.server.js';
 import rehypeSlug from '$lib/plugins/rehype-slug.js';
@@ -22,6 +23,7 @@ const processor = unified()
   .use(rehypeRaw)
   .use(rehypeSlug)
   .use(rehypeRewriteLinks)
+  .use(rehypeShiki, { theme: 'github-dark' })
   .use(rehypeStringify);
 
 export async function load({ params }): Promise<{ doc: DocPage; html: string }> {

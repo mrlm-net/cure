@@ -4,12 +4,6 @@
   import { extractToc } from '$lib/content/toc.js';
   import type { DocPage } from '$lib/types/index.js';
   import { onMount } from 'svelte';
-  import Prism from 'prismjs';
-  import 'prismjs/components/prism-go.js';
-  import 'prismjs/components/prism-bash.js';
-  import 'prismjs/components/prism-typescript.js';
-  import 'prismjs/components/prism-json.js';
-  import 'prismjs/components/prism-yaml.js';
 
   interface Props {
     data: { doc: DocPage; html: string };
@@ -20,10 +14,7 @@
   const toc = $derived(extractToc(data.doc.content));
 
   onMount(() => {
-    // Run Prism highlighting after mount
-    Prism.highlightAll();
-
-    // Inject copy buttons into each code block
+    // Inject copy buttons into each code block (highlighting is server-side via shiki)
     document.querySelectorAll('pre').forEach((pre) => {
       const btn = document.createElement('button');
       btn.textContent = 'Copy';

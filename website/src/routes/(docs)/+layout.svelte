@@ -25,7 +25,7 @@
 <!-- Main content offset for fixed sidebar -->
 <div class="min-h-screen pt-14">
   <div class="md:pl-64">
-    <main class="px-4 py-10 md:px-8 md:py-16">
+    <main class="px-4 py-5 md:px-8 md:py-8">
       {@render children()}
     </main>
     <Footer />
