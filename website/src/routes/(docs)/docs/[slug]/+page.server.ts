@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
 import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
 import rehypeShiki from '@shikijs/rehype';
@@ -19,6 +20,7 @@ export async function entries() {
 
 const processor = unified()
   .use(remarkParse)
+  .use(remarkGfm)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeRaw)
   .use(rehypeSlug)
