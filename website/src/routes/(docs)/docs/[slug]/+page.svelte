@@ -67,7 +67,7 @@
 
   <!-- Table of contents (desktop) -->
   {#if toc.length > 0}
-    <aside class="hidden w-28 shrink-0 xl:block">
+    <aside class="hidden w-36 shrink-0 xl:block">
       <div class="sticky top-20">
         <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-[#848d97]">
           On this page

@@ -1,5 +1,291 @@
-¥§$j zw«j×¢šš+µÊ'µìm~V ~kh²–­‡÷â•êZ¶-®)à²­†æÜ¢oæ®Y§zßÜº·¿¦H?~È"¶›r‰¿š¹fërêŞş™ şšèš›`ŠØnmÊ&şjåšw­ıË«{údƒû^š™Zµè"¶›r‰¿š¹fërêŞş™ ş×«š)Ú—ÿÂ¢˜¥¢Ò'²ÚîrØ¨À¨šf§v§z¶­zÆ ŠØno÷(¦)h¶)ì¶»œ¶*'²g_ŠW­Ê—‚¢˜¥¢Ò'²ÚîrØ¨À¨šf§vËk¹ËüYZ‚Éèœ‰íz¶œ¶+ŞnŠ%~ŠÜyº(•ÚòFéÛ¢‰hºÚn´ö­†ËkŠx?üX•ÛÚ–ç¬~º&~V ²Šé®‰©¶ÉÚ™ë-®)àuë®*mŠ‰ì¶¸§‚V§‚æ zËkŠxº)]NŠ%²Úâ^²Ñkjg°¢¹,¶¸§Ê'½éíŠ‰ì²Úâÿr‰¦jÇ©j¶­y×îÇ¢˜¥¢Ò'²ÚîrØ¨À¨šf§tÖ¦zËkŠx+zÛ«Ê)ŠZ-Š{-®ç-Š‰ì~éÜp*)ŠZ-"{-®ç-Š‰ì
-‰¦jwCzÇ+Š›b¢{-®)à­ën®qêÚµè"¶›ıÊ)ŠZ-Š{-®ç-Š‰ì™×è¬h­æÂ¢˜¥¢×îÇ¢˜¥¢Ò'²ÚîrØ¨À¨šf§uKë-®)à­ën®u,jœº· zw«j×œ¢˜¥¢Ø§²ÚîrØ¨Çåjzw«j×š‚+a¹¿Ü¢˜¥¢Ø§²ÚîrØ¨É~)^Â+a¦º#yË\¢{^Æ×è¬h­æÂ¢˜¥¢Ôáz­†æÿv*ŞrÚ+Ê+­æ­yÖ®¶‰š¶'–\¢~+]¡ë'¢×±ŠËH×«iËb½é¨uç^}«¥µË«z§z¶­yÊ)ŠZ-Š{-®ç-Š‰ì6‰â×«iËb½é¨uçè¬"?7.­èêÚµç(¦)h¶)ì¶»œ¶*'²z'Š{^­§-Š÷§jg¦Éªiuë®*mŠ‰À²-¢‰_¢µåjx.j ¡»¢•Ûh¢Yš‘ë^²×ëjg°¢¹-zËb(÷§¶*'²
-šØ(½ëE•¨,‰â×«iËb½àâ±¦åzšèš›l­ê®Š·š–[Ú–ç¬¾&Ÿ•¨,v¼«ºsëzøÂ§z¶­yÚ.¶›­Â+a¢ëp®+bhv+$©>º#yËgjg«z«¢­çbz'Š{^­§-Š÷zÇ+Š›b¢t¡¢»]zÇ+Š›b¢zŞªè«yØ§‰â×«iËb½éZšãëŠf«ÊV§‚æ z·ªº*Şv)ç¢x§µêÚrØ¯y»¢•Ûh¢PnŠWm¢‰]yö®–Ùš‘ë^²×ëjg°¢¹zË_­©ÂŠäuçÚº[ejx.j¬¥ç"~'¢{ŞØ¨À¨šf¬z–«j×r‰ïz{b¢{(¦Ø¨©hºÚn´ë­¦ë_ŠW©jØ]yö®–ßàŠØno÷(¦)h¶)ì¶»œ¶*'²g_¢·:÷«Â¸­yìb²Ø§ø¥{­†‹­¦º&¦Ø§€LZš™^°‰íz¶œ¶+Şš‡^rêŞéŞ­«^rŠb–‹bËk¹Ëb¢{¢x§µêÚrØ¯{­…©e½©nzÇ.­èêÚµç(¦)h¶)ì¶»œ¶*'²z'Š{^­§-Š÷§jg¦Éªiuë®*mŠ‰Æ "È~Šİzö®¶‰š¶*'•©à¹¨‚ƒëzøÂ‹­¦ëpŠØhºÜ+ŠØ§‚ÚŠÉº· zw«j×œ¢˜¥¢Ø§²ÚîrØ¨Éè)íz¶œ¶+Ş©›&©¥×¬r¸©¶*'€‹!ú+uëÚºÚ&jØ¨V§‚æ z
-¯*îû§qÀ¨¦)h´‰ì¶»œ¶*'°*&™©İV ±ùZ€YZ'­~Ç­~V 5ì•¨z×(¦)h¶)ì¶»œ¶*'±ùZ€*'¶)îxéÄ®º+~Ç­Š%UªÜ‰È×«iËb½éè)íz¶œ¶+Ş}©lx8¬i¹^¦º&¦Û+z«¢­æ¥–ö¥¹ë/‰§åj±ëA¢‰Uj·¢·~ŠÜyö¥±ã¯z¼+Š×Æ+-ŠxŠW°ŠØhºÚk¢jmŠx±ëA¢‰Uj·¯$nÚò®éßj[>·¯‰ì(ºÚn·­†‹­Â¸­ŠxŠWŸ±ëR¶¸§V«r‹­¦ëOjØhºÚn·ø"¶›ıÊ)ŠZ-Š{-®ç-Š‰ì™Ó®¶›­~)^¥«a~Ç­JÚâZ­ÉÚ™éÚ™ãë¢7œ¶v¦yûµ+kŠxj·zÇ+Š›b¢w^±Êâ¦Ø¨œúèç-uë®*mŠ‰ß±ëR¶¸§V«rV§‚æ zV§‚æ xúâ™ªò¦º ­©¦Šx%jx.jŸ±ëR¶¸§V«q»¢•Ôè¢VîŠWm¢‰Aº)]¶Š%z	š‘éé™Æ«‚‡ìzÔ­®)àUªÜµë-¶¦{
-+’×¬µúÚ™ì(®DŞ²×ëjg°¢¹±ëR¶¸§V«qÊ'½éíŠ‰ìr‰ïz{b¢{¢iš±êZ­«^vG²r‰ïz{b¢{+zÛ«ûµû§qÀ¨¦)h´‰ì¶»œ¶*'°*&™©İFéÜ·(×±´*'µìmµË^®h§jP¨×±µêë¢·%¡§Cyö®–Û-r'Ş®
+package generate
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/mrlm-net/cure/pkg/fs"
+	"github.com/mrlm-net/cure/pkg/prompt"
+	"github.com/mrlm-net/cure/pkg/template"
+	"github.com/mrlm-net/cure/pkg/terminal"
+)
+
+// CopilotInstructionsCommand generates .github/copilot-instructions.md for GitHub Copilot.
+type CopilotInstructionsCommand struct {
+	nonInteractive bool
+	force          bool
+	dryRun         bool
+	outputPath     string
+
+	name          string
+	description   string
+	language      string
+	buildTool     string
+	testFramework string
+	conventions   string
+}
+
+func (c *CopilotInstructionsCommand) Name() string { return "copilot-instructions" }
+func (c *CopilotInstructionsCommand) Description() string {
+	return "Generate .github/copilot-instructions.md for GitHub Copilot"
+}
+func (c *CopilotInstructionsCommand) Usage() string {
+	return `Usage: cure generate copilot-instructions [flags]
+
+Generate .github/copilot-instructions.md with YAML frontmatter (applyTo: "**") for
+GitHub Copilot. The .github/ directory is created automatically if it does not exist.
+
+Interactive mode (default):
+  cure generate copilot-instructions
+
+Non-interactive mode (for CI/CD):
+  cure generate copilot-instructions --non-interactive \
+    --name myapp \
+    --description "A CLI tool for X" \
+    --language go
+
+Flags:
+  --non-interactive   Disable prompts, require all values via flags
+  --dry-run           Preview generated output without writing to disk
+  --name              Project name (required in non-interactive)
+  --description       Short description (required in non-interactive)
+  --language          Primary language (required in non-interactive)
+  --build-tool        Build tool (default: make)
+  --test-framework    Test framework (default: language-specific)
+  --conventions       Comma-separated conventions (optional)
+  --output            Output file path (default: ./.github/copilot-instructions.md)
+  --force             Overwrite existing file without prompting
+`
+}
+
+func (c *CopilotInstructionsCommand) Flags() *flag.FlagSet {
+	fset := flag.NewFlagSet("copilot-instructions", flag.ContinueOnError)
+	fset.BoolVar(&c.nonInteractive, "non-interactive", false, "Disable prompts, require all values via flags")
+	fset.BoolVar(&c.force, "force", false, "Overwrite existing file without prompting")
+	fset.BoolVar(&c.dryRun, "dry-run", false, "Preview output without writing file")
+	fset.StringVar(&c.outputPath, "output", "./.github/copilot-instructions.md", "Output file path")
+	fset.StringVar(&c.name, "name", "", "Project name")
+	fset.StringVar(&c.description, "description", "", "Project description")
+	fset.StringVar(&c.language, "language", "", "Primary programming language")
+	fset.StringVar(&c.buildTool, "build-tool", "", "Build tool (e.g., make, npm, cargo)")
+	fset.StringVar(&c.testFramework, "test-framework", "", "Test framework")
+	fset.StringVar(&c.conventions, "conventions", "", "Comma-separated key conventions")
+	return fset
+}
+
+func (c *CopilotInstructionsCommand) Run(ctx context.Context, tc *terminal.Context) error {
+	c.loadDefaults(tc)
+
+	if err := c.gatherInput(tc); err != nil {
+		return err
+	}
+
+	data := c.buildTemplateData()
+	output, err := template.Render("copilot-instructions", data)
+	if err != nil {
+		return fmt.Errorf("failed to render template: %w", err)
+	}
+
+	if c.dryRun {
+		fmt.Fprintf(tc.Stdout, "# Dry run mode: would write to %s\n\n", c.outputPath)
+		fmt.Fprintln(tc.Stdout, output)
+		return nil
+	}
+
+	if err := c.checkOverwrite(tc); err != nil {
+		return err
+	}
+
+	// Ensure parent directory exists (.github/)
+	if dir := filepath.Dir(c.outputPath); dir != "." {
+		if err := fs.EnsureDir(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+
+	if err := fs.AtomicWrite(c.outputPath, []byte(output), 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", c.outputPath, err)
+	}
+
+	c.printSuccess(tc)
+	return nil
+}
+
+func (c *CopilotInstructionsCommand) loadDefaults(tc *terminal.Context) {
+	if tc.Config == nil {
+		return
+	}
+	if c.language == "" {
+		if val := tc.Config.Get("generate.language", ""); val != nil {
+			if str, ok := val.(string); ok {
+				c.language = str
+			}
+		}
+	}
+	if c.buildTool == "" {
+		if val := tc.Config.Get("generate.build-tool", ""); val != nil {
+			if str, ok := val.(string); ok {
+				c.buildTool = str
+			}
+		}
+	}
+	if c.testFramework == "" {
+		if val := tc.Config.Get("generate.test-framework", ""); val != nil {
+			if str, ok := val.(string); ok {
+				c.testFramework = str
+			}
+		}
+	}
+	if c.conventions == "" {
+		if val := tc.Config.Get("generate.conventions", ""); val != nil {
+			if str, ok := val.(string); ok {
+				c.conventions = str
+			}
+		}
+	}
+}
+
+func (c *CopilotInstructionsCommand) gatherInput(tc *terminal.Context) error {
+	if c.nonInteractive {
+		return c.validateFlags()
+	}
+	return c.promptUser(tc)
+}
+
+func (c *CopilotInstructionsCommand) validateFlags() error {
+	if c.name == "" {
+		return fmt.Errorf("--name is required in non-interactive mode")
+	}
+	if c.description == "" {
+		return fmt.Errorf("--description is required in non-interactive mode")
+	}
+	if c.language == "" {
+		return fmt.Errorf("--language is required in non-interactive mode")
+	}
+	if c.buildTool == "" {
+		c.buildTool = "make"
+	}
+	if c.testFramework == "" {
+		c.testFramework = c.defaultTestFramework()
+	}
+	return nil
+}
+
+func (c *CopilotInstructionsCommand) promptUser(tc *terminal.Context) error {
+	prompter := prompt.NewPrompter(tc.Stdout, os.Stdin)
+
+	var err error
+	c.name, err = prompter.Required("What is the project name?", c.name)
+	if err != nil {
+		return err
+	}
+
+	c.description, err = prompter.Required("Short description (1-2 sentences):", c.description)
+	if err != nil {
+		return err
+	}
+
+	c.language, err = prompter.Required("Primary language (e.g., Go, Python, TypeScript):", c.language)
+	if err != nil {
+		return err
+	}
+
+	if c.buildTool == "" {
+		c.buildTool = "make"
+	}
+	c.buildTool, err = prompter.Optional(fmt.Sprintf("Build tool [%s]:", c.buildTool), c.buildTool)
+	if err != nil {
+		return err
+	}
+
+	defaultTest := c.testFramework
+	if defaultTest == "" {
+		defaultTest = c.defaultTestFramework()
+	}
+	c.testFramework, err = prompter.Optional(fmt.Sprintf("Test framework [%s]:", defaultTest), defaultTest)
+	if err != nil {
+		return err
+	}
+
+	c.conventions, err = prompter.Optional("Key conventions (comma-separated):", c.conventions)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *CopilotInstructionsCommand) defaultTestFramework() string {
+	switch strings.ToLower(c.language) {
+	case "go":
+		return "testing"
+	case "python":
+		return "pytest"
+	case "javascript", "typescript":
+		return "jest"
+	case "rust":
+		return "cargo test"
+	case "java":
+		return "junit"
+	default:
+		return "testing"
+	}
+}
+
+func (c *CopilotInstructionsCommand) checkOverwrite(tc *terminal.Context) error {
+	exists, err := fs.Exists(c.outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to check if %s exists: %w", c.outputPath, err)
+	}
+	if !exists {
+		return nil
+	}
+	if c.force {
+		return nil
+	}
+	if c.nonInteractive {
+		return fmt.Errorf("%s already exists. Use --force to overwrite", c.outputPath)
+	}
+	prompter := prompt.NewPrompter(tc.Stdout, os.Stdin)
+	confirm, err := prompter.Confirm(fmt.Sprintf("%s already exists. Overwrite?", c.outputPath))
+	if err != nil {
+		return err
+	}
+	if !confirm {
+		return fmt.Errorf("aborted: file exists and overwrite declined")
+	}
+	return nil
+}
+
+func (c *CopilotInstructionsCommand) buildTemplateData() map[string]interface{} {
+	convList := []string{}
+	if c.conventions != "" {
+		for _, conv := range strings.Split(c.conventions, ",") {
+			convList = append(convList, strings.TrimSpace(conv))
+		}
+	}
+	return map[string]interface{}{
+		"Name":          c.name,
+		"Description":   c.description,
+		"Language":      c.language,
+		"BuildTool":     c.buildTool,
+		"TestFramework": c.testFramework,
+		"Conventions":   convList,
+	}
+}
+
+func (c *CopilotInstructionsCommand) printSuccess(tc *terminal.Context) {
+	relPath, _ := filepath.Rel(".", c.outputPath)
+	if relPath == "" {
+		relPath = c.outputPath
+	}
+	fmt.Fprintf(tc.Stdout, "Generated %s successfully.\n\n", relPath)
+	fmt.Fprintln(tc.Stdout, "Next steps:")
+	fmt.Fprintln(tc.Stdout, "1. Review the file and customize sections as needed")
+	fmt.Fprintln(tc.Stdout, "2. Commit to version control")
+	fmt.Fprintln(tc.Stdout, "3. GitHub Copilot picks it up automatically from .github/copilot-instructions.md")
+}

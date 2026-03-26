@@ -260,4 +260,3 @@ func parseSingleToleration(spec string) (k8sToleration, error) {
 	}
 	return k8sToleration{Key: keyPart, Operator: "Exists", Effect: effect}, nil
 }
-
