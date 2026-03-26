@@ -3,7 +3,6 @@
   import { siteConfig } from '$lib/config/site.js';
   import { extractToc } from '$lib/content/toc.js';
   import type { DocPage } from '$lib/types/index.js';
-  import { onMount } from 'svelte';
 
   interface Props {
     data: { doc: DocPage; html: string };
@@ -13,9 +12,12 @@
 
   const toc = $derived(extractToc(data.doc.content));
 
-  onMount(() => {
+  // Re-run on every navigation: track data.html so $effect fires when the page changes.
+  $effect(() => {
+    const _html = data.html;
     // Inject copy buttons into each code block (highlighting is server-side via shiki)
     document.querySelectorAll('pre').forEach((pre) => {
+      if (pre.querySelector('.copy-btn')) return; // already injected
       const btn = document.createElement('button');
       btn.textContent = 'Copy';
       btn.className = 'copy-btn';

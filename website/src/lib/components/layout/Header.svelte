@@ -21,7 +21,7 @@
 <header
   class="fixed top-0 left-0 right-0 z-50 h-14 border-b border-[#30363d] bg-[#0d1117]/95 backdrop-blur-sm"
 >
-  <div class="flex h-full items-center justify-between px-4 md:pl-64 md:pr-8">
+  <div class="flex h-full items-center justify-between px-4 md:px-8">
     <!-- Logo / site title -->
     <div class="flex items-center gap-3">
       <!-- Mobile menu button -->

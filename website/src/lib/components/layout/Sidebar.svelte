@@ -52,7 +52,7 @@
 
 <!-- Sidebar panel -->
 <aside
-  class="fixed top-14 bottom-0 left-0 z-40 w-64 overflow-y-auto border-r border-[#30363d] bg-[#0d1117] transition-transform duration-200 md:translate-x-0 {mobileOpen
+  class="fixed top-14 bottom-0 left-0 z-40 w-full md:w-64 overflow-y-auto border-r border-[#30363d] bg-[#0d1117] transition-transform duration-200 md:translate-x-0 {mobileOpen
     ? 'translate-x-0'
     : '-translate-x-full'}"
 >
