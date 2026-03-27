@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-27
+
+### Added
+
+- `cure generate scaffold` — interactive `MultiSelect` wizard that generates all AI context files in one pass; calls `GenerateClaudeMD`, `GenerateAgentsMD`, `GenerateCopilotInstructions`, `GenerateCursorRules`, `GenerateWindsurfRules`, `GenerateGeminiMD` with continue-on-error semantics; flags: `--select` (comma-separated subset), `--non-interactive` (generates all without prompts), `--dry-run`, `--force`
+- `cure generate devcontainer` — generates `.devcontainer/devcontainer.json` (and an optional `Dockerfile` stub) for VS Code Dev Containers and GitHub Codespaces; uses `encoding/json.MarshalIndent` for JSON generation (no template injection risk); flags: `--name`, `--base-image`, `--dockerfile`, `--extensions`, `--post-create-command`, `--output-dir`, `--dry-run`, `--force`, `--non-interactive`
+- `cure generate editorconfig` — generates `.editorconfig` with per-language indent rules; supported languages: `go`, `javascript`, `python`, `rust`, `java`, `shell`, `markdown`, `yaml`, `generic`; sections emitted in canonical order for deterministic output; flags: `--languages` (comma-separated), `--output`, `--dry-run`, `--force`, `--non-interactive`
+- `cure generate gitignore` — generates `.gitignore` from 11 embedded profiles: `go`, `node`, `python`, `rust`, `java`, `macos`, `windows`, `linux`, `jetbrains`, `vscode`, `vim`; cross-profile deduplication removes duplicate patterns; flags: `--profiles` (comma-separated), `--output`, `--dry-run`, `--force`, `--non-interactive`
+- `cure generate github-workflow` — generates `.github/workflows/ci.yml` for GitHub Actions CI targeting Go projects; configurable `--go-version` with format validation; optional `--lint` (adds `go vet` step) and `--coverage` (adds codecov upload); flags: `--go-version`, `--lint`, `--coverage`, `--output`, `--dry-run`, `--force`, `--non-interactive`
+- Programmatic API for all AI-file subcommands — each existing subcommand (`claude-md`, `agents-md`, `copilot-instructions`, `cursor-rules`, `windsurf-rules`, `gemini-md`) now exports a `Generate*(ctx, w io.Writer, opts XxxOpts) error` function callable without the `terminal.Context` layer
+
+### Security
+
+- `cure generate devcontainer`: `--base-image` validated against `^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$` to prevent Dockerfile injection
+- All output paths sanitised with `filepath.Clean`
+
 ## [0.6.3] - 2026-03-26
 
 ### Added
@@ -181,7 +197,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cmd/cure/main.go` — thin entry point wiring the terminal router
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
-[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/mrlm-net/cure/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/mrlm-net/cure/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/mrlm-net/cure/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/mrlm-net/cure/compare/v0.6.0...v0.6.1

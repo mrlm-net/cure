@@ -8,7 +8,7 @@
 
 Cure automates repetitive development tasks through AI context management, code generation, and network diagnostics. Manage multi-turn AI conversations from the terminal (`cure context`), generate templates for AI assistants (`CLAUDE.md`), trace HTTP/TCP/UDP connections with detailed timing and metadata, and output results in developer-friendly formats (NDJSON, HTML). Built with minimal external dependencies and only Go's standard library for core functionality, cure is designed as a foundation for developers who need reliable, auditable tooling without dependency bloat.
 
-The project is under active development — currently at v0.6.2 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
+The project is under active development — currently at v0.7.0 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
 
 ## Key Features
 
@@ -106,8 +106,21 @@ The `cure context` commands are backed by [`pkg/agent`](#pkgagent) and [`pkg/age
 
 ### Generation
 
-- `cure generate claude-md` — Generate `CLAUDE.md` project context file with conventions and AI assistant configuration
-- `cure generate claude-md --dry-run` — Print the generated content to stdout without writing to disk
+| Command | Output | Notes |
+|---------|--------|-------|
+| `cure generate scaffold` | All AI context files in one pass | Interactive `MultiSelect` wizard; `--select` for a subset, `--non-interactive` to skip prompts |
+| `cure generate claude-md` | `CLAUDE.md` | AI assistant context for Claude Code |
+| `cure generate agents-md` | `AGENTS.md` | Cross-tool AI context (Copilot, Cursor, Devin, Gemini CLI, OpenAI Codex) |
+| `cure generate copilot-instructions` | `.github/copilot-instructions.md` | GitHub Copilot instructions with YAML frontmatter |
+| `cure generate cursor-rules` | `.cursor/rules/project.mdc` | Cursor rules with YAML frontmatter |
+| `cure generate windsurf-rules` | `.windsurfrules` | Windsurf-style numbered rules |
+| `cure generate gemini-md` | `GEMINI.md` | Google Gemini CLI auto-discovery format |
+| `cure generate devcontainer` | `.devcontainer/devcontainer.json` | VS Code Dev Containers / GitHub Codespaces; optional `Dockerfile` stub via `--dockerfile` |
+| `cure generate editorconfig` | `.editorconfig` | Per-language indent rules; supported: `go`, `javascript`, `python`, `rust`, `java`, `shell`, `markdown`, `yaml`, `generic` |
+| `cure generate gitignore` | `.gitignore` | Built from 11 embedded profiles: `go`, `node`, `python`, `rust`, `java`, `macos`, `windows`, `linux`, `jetbrains`, `vscode`, `vim` |
+| `cure generate github-workflow` | `.github/workflows/ci.yml` | GitHub Actions CI for Go; optional `--lint` and `--coverage` steps |
+
+All `cure generate` subcommands support `--dry-run` (print to stdout without writing), `--force` (overwrite existing files), and `--non-interactive` (use defaults without prompting).
 
 ### Health checks
 
@@ -707,18 +720,20 @@ For detailed guidance, see `CLAUDE.md` in the repository root.
 
 ## Roadmap
 
-Cure is currently at v0.6.2. The v0.6.x series delivered the developer experience foundation: `pkg/prompt`, `pkg/fs`, `pkg/style`, and `pkg/env` as standalone reusable packages; the `cure doctor` command with 7 health checks; `--dry-run` for `cure generate claude-md`; and custom template directory support in `pkg/template`.
+Cure is currently at v0.7.0. The v0.7.0 release added five new `cure generate` subcommands — `scaffold`, `devcontainer`, `editorconfig`, `gitignore`, and `github-workflow` — completing the Generation & Scaffolding epic. The v0.6.x series delivered the developer experience foundation: `pkg/prompt`, `pkg/fs`, `pkg/style`, and `pkg/env` as standalone reusable packages; the `cure doctor` command with 7 health checks; `--dry-run` for `cure generate`; and custom template directory support in `pkg/template`.
 
 Earlier milestones:
 
+- **v0.6.x** — Developer experience foundation: `pkg/prompt`, `pkg/fs`, `pkg/style`, `pkg/env`; `cure doctor`; AI assistant template subcommands (`agents-md`, `copilot-instructions`, `cursor-rules`, `windsurf-rules`, `gemini-md`)
 - **v0.5.0** — `pkg/agent`: provider-agnostic AI agent context management, `cure context` command group, Anthropic Claude adapter
 - **v0.4.x** — `pkg/mcp` for stdlib-only MCP server implementation, shell auto-completion
 - **v0.1.0–v0.3.x** — CLI framework (`pkg/terminal`), configuration (`pkg/config`), network tracing (`pkg/tracer`), template generation (`pkg/template`)
 
 Upcoming milestones:
 
-- **v0.7.0** — Expanded template generation (multi-file templates, template inheritance), additional AI provider adapters
-- **v0.8.0+** — `cure init` for project bootstrapping, plugin architecture exploration
+- **v0.8.0** — Project bootstrapping (`cure init`), enhanced `cure doctor` with auto-fix suggestions
+- **v0.9.0** — Multi-provider AI support, `cure mcp serve` for serving cure as an MCP tool
+- **v1.0.0** — API stability for all `pkg/` packages; freeze of breaking changes
 
 The v1.0.0 milestone marks API stability for `pkg/` packages and freeze of breaking changes. Track progress on the [GitHub Projects board](https://github.com/orgs/mrlm-net/projects/9).
 
