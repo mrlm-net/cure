@@ -1,0 +1,17 @@
+{
+  "name": "{{.Name}}",
+  {{- if .UseDockerfile}}
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  {{- else}}
+  "image": "{{.BaseImage}}",
+  {{- end}}
+  "features": {},
+  "customizations": {
+    "vscode": {
+      "extensions": [{{range $i, $e := .Extensions}}{{if $i}}, {{end}}"{{$e}}"{{end}}]
+    }
+  }{{if .PostCreateCommand}},
+  "postCreateCommand": "{{.PostCreateCommand}}"{{end}}
+}
