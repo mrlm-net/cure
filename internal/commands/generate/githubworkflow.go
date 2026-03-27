@@ -178,7 +178,7 @@ func (c *GithubWorkflowCommand) Flags() *flag.FlagSet {
 
 // Run executes the command, either via interactive prompts or using provided flags.
 func (c *GithubWorkflowCommand) Run(ctx context.Context, tc *terminal.Context) error {
-	if !c.nonInteractive {
+	if !c.nonInteractive && prompt.IsInteractive(os.Stdin) {
 		if err := c.promptUser(tc); err != nil {
 			return err
 		}
