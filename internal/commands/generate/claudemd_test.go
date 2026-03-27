@@ -284,7 +284,9 @@ func TestClaudeMDCommand_DryRun(t *testing.T) {
 			wantErr:     false,
 			checkNoFile: false, // not checking tmp dir; just checking stdout
 			checkOutput: func(t *testing.T, stdout string) {
-				if !strings.Contains(stdout, "# Dry run mode: would write to ./CLAUDE.md") {
+				// filepath.Clean strips the leading "./" — accept "CLAUDE.md" or "./CLAUDE.md".
+				if !strings.Contains(stdout, "# Dry run mode: would write to") ||
+					!strings.Contains(stdout, "CLAUDE.md") {
 					t.Errorf("Dry-run header should show default path; got stdout:\n%s", stdout)
 				}
 			},
@@ -453,7 +455,7 @@ func TestClaudeMDCommand_OverwriteProtection(t *testing.T) {
 	}
 }
 
-func TestClaudeMDCommand_DefaultTestFramework(t *testing.T) {
+func TestDefaultTestFramework(t *testing.T) {
 	tests := []struct {
 		language string
 		want     string
@@ -472,10 +474,7 @@ func TestClaudeMDCommand_DefaultTestFramework(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.language, func(t *testing.T) {
-			cmd := &ClaudeMDCommand{
-				language: tt.language,
-			}
-			got := cmd.defaultTestFramework()
+			got := defaultTestFramework(tt.language)
 			if got != tt.want {
 				t.Errorf("defaultTestFramework() = %q, want %q", got, tt.want)
 			}
