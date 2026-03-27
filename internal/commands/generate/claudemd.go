@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/mrlm-net/cure/pkg/fs"
 	"github.com/mrlm-net/cure/pkg/prompt"
-	"github.com/mrlm-net/cure/pkg/template"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
@@ -100,41 +98,66 @@ func (c *ClaudeMDCommand) Flags() *flag.FlagSet {
 }
 
 func (c *ClaudeMDCommand) Run(ctx context.Context, tc *terminal.Context) error {
-	// Load defaults from config if available
 	c.loadDefaults(tc)
 
-	// Gather input (prompts or validate flags); validation errors still surface in dry-run
 	if err := c.gatherInput(tc); err != nil {
 		return err
 	}
 
-	// Render template
-	data := c.buildTemplateData()
-	output, err := template.Render("claude-md", data)
-	if err != nil {
-		return fmt.Errorf("failed to render template: %w", err)
+	// In interactive mode, prompt the user when the target file already exists.
+	// This check runs before Generate*, which will honour opts.Force.
+	if !c.nonInteractive && !c.dryRun {
+		if err := c.checkOverwrite(tc); err != nil {
+			return err
+		}
 	}
 
-	// Dry-run: print rendered content to stdout and return without writing
-	if c.dryRun {
-		fmt.Fprintf(tc.Stdout, "# Dry run mode: would write to %s\n\n", c.outputPath)
-		fmt.Fprintln(tc.Stdout, output)
-		return nil
-	}
-
-	// Check if output file exists (skipped in dry-run — no file will be written)
-	if err := c.checkOverwrite(tc); err != nil {
+	if err := GenerateClaudeMD(ctx, tc.Stdout, ClaudeMDOpts{c.toOpts()}); err != nil {
 		return err
 	}
 
-	// Write to file
-	if err := fs.AtomicWrite(c.outputPath, []byte(output), 0644); err != nil {
-		return fmt.Errorf("failed to write %s: %w", c.outputPath, err)
+	if !c.dryRun {
+		c.printSuccess(tc)
 	}
-
-	// Success message
-	c.printSuccess(tc)
 	return nil
+}
+
+// checkOverwrite prompts for confirmation when the output file already exists
+// and --force has not been set (interactive mode only).
+func (c *ClaudeMDCommand) checkOverwrite(tc *terminal.Context) error {
+	exists, err := fs.Exists(c.outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to check if %s exists: %w", c.outputPath, err)
+	}
+	if !exists || c.force {
+		return nil
+	}
+	prompter := prompt.NewPrompter(tc.Stdout, os.Stdin)
+	confirm, err := prompter.Confirm(fmt.Sprintf("%s already exists. Overwrite?", c.outputPath))
+	if err != nil {
+		return err
+	}
+	if !confirm {
+		return fmt.Errorf("aborted: file exists and overwrite declined")
+	}
+	c.force = true // signal to GenerateClaudeMD that overwrite is permitted
+	return nil
+}
+
+// toOpts converts the command's internal state into an AIFileOpts value.
+func (c *ClaudeMDCommand) toOpts() AIFileOpts {
+	return AIFileOpts{
+		Name:           c.name,
+		Description:    c.description,
+		Language:       c.language,
+		BuildTool:      c.buildTool,
+		TestFramework:  c.testFramework,
+		Conventions:    c.conventions,
+		OutputPath:     c.outputPath,
+		Force:          c.force,
+		DryRun:         c.dryRun,
+		NonInteractive: c.nonInteractive,
+	}
 }
 
 // loadDefaults reads default values from tc.Config if available.
@@ -192,12 +215,13 @@ func (c *ClaudeMDCommand) validateFlags() error {
 	if c.language == "" {
 		return fmt.Errorf("--language is required in non-interactive mode")
 	}
-	// Optional fields get defaults if not set
+	// Optional fields get defaults if not set — GenerateClaudeMD will also apply
+	// these, but setting them here keeps validateFlags self-contained.
 	if c.buildTool == "" {
 		c.buildTool = "make"
 	}
 	if c.testFramework == "" {
-		c.testFramework = c.defaultTestFramework()
+		c.testFramework = defaultTestFramework(c.language)
 	}
 	return nil
 }
@@ -232,7 +256,7 @@ func (c *ClaudeMDCommand) promptUser(tc *terminal.Context) error {
 
 	defaultTest := c.testFramework
 	if defaultTest == "" {
-		defaultTest = c.defaultTestFramework()
+		defaultTest = defaultTestFramework(c.language)
 	}
 	c.testFramework, err = prompter.Optional(fmt.Sprintf("Test framework [%s]:", defaultTest), defaultTest)
 	if err != nil {
@@ -245,74 +269,6 @@ func (c *ClaudeMDCommand) promptUser(tc *terminal.Context) error {
 	}
 
 	return nil
-}
-
-// defaultTestFramework returns a sensible default based on language.
-func (c *ClaudeMDCommand) defaultTestFramework() string {
-	switch strings.ToLower(c.language) {
-	case "go":
-		return "testing"
-	case "python":
-		return "pytest"
-	case "javascript", "typescript":
-		return "jest"
-	case "rust":
-		return "cargo test"
-	case "java":
-		return "junit"
-	default:
-		return "testing"
-	}
-}
-
-// checkOverwrite checks if output file exists and prompts for confirmation.
-func (c *ClaudeMDCommand) checkOverwrite(tc *terminal.Context) error {
-	exists, err := fs.Exists(c.outputPath)
-	if err != nil {
-		return fmt.Errorf("failed to check if %s exists: %w", c.outputPath, err)
-	}
-	if !exists {
-		return nil // File doesn't exist, safe to write
-	}
-
-	if c.force {
-		return nil // --force flag set, overwrite without prompting
-	}
-
-	if c.nonInteractive {
-		return fmt.Errorf("%s already exists. Use --force to overwrite", c.outputPath)
-	}
-
-	// Interactive: prompt for confirmation
-	prompter := prompt.NewPrompter(tc.Stdout, os.Stdin)
-	confirm, err := prompter.Confirm(fmt.Sprintf("%s already exists. Overwrite?", c.outputPath))
-	if err != nil {
-		return err
-	}
-	if !confirm {
-		return fmt.Errorf("aborted: file exists and overwrite declined")
-	}
-
-	return nil
-}
-
-// buildTemplateData constructs the data structure for template rendering.
-func (c *ClaudeMDCommand) buildTemplateData() map[string]interface{} {
-	convList := []string{}
-	if c.conventions != "" {
-		for _, conv := range strings.Split(c.conventions, ",") {
-			convList = append(convList, strings.TrimSpace(conv))
-		}
-	}
-
-	return map[string]interface{}{
-		"Name":          c.name,
-		"Description":   c.description,
-		"Language":      c.language,
-		"BuildTool":     c.buildTool,
-		"TestFramework": c.testFramework,
-		"Conventions":   convList,
-	}
 }
 
 // printSuccess writes success message and next steps to stdout.

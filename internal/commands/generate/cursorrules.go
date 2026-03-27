@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/mrlm-net/cure/pkg/fs"
 	"github.com/mrlm-net/cure/pkg/prompt"
-	"github.com/mrlm-net/cure/pkg/template"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
@@ -84,35 +82,56 @@ func (c *CursorRulesCommand) Run(ctx context.Context, tc *terminal.Context) erro
 		return err
 	}
 
-	data := c.buildTemplateData()
-	output, err := template.Render("cursor-rules", data)
-	if err != nil {
-		return fmt.Errorf("failed to render template: %w", err)
-	}
-
-	if c.dryRun {
-		fmt.Fprintf(tc.Stdout, "# Dry run mode: would write to %s\n\n", c.outputPath)
-		fmt.Fprintln(tc.Stdout, output)
-		return nil
-	}
-
-	if err := c.checkOverwrite(tc); err != nil {
-		return err
-	}
-
-	// Ensure parent directory exists (.cursor/rules/)
-	if dir := filepath.Dir(c.outputPath); dir != "." {
-		if err := fs.EnsureDir(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	if !c.nonInteractive && !c.dryRun {
+		if err := c.checkOverwrite(tc); err != nil {
+			return err
 		}
 	}
 
-	if err := fs.AtomicWrite(c.outputPath, []byte(output), 0644); err != nil {
-		return fmt.Errorf("failed to write %s: %w", c.outputPath, err)
+	if err := GenerateCursorRules(ctx, tc.Stdout, CursorRulesOpts{c.toOpts()}); err != nil {
+		return err
 	}
 
-	c.printSuccess(tc)
+	if !c.dryRun {
+		c.printSuccess(tc)
+	}
 	return nil
+}
+
+func (c *CursorRulesCommand) checkOverwrite(tc *terminal.Context) error {
+	exists, err := fs.Exists(c.outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to check if %s exists: %w", c.outputPath, err)
+	}
+	if !exists || c.force {
+		return nil
+	}
+	prompter := prompt.NewPrompter(tc.Stdout, os.Stdin)
+	confirm, err := prompter.Confirm(fmt.Sprintf("%s already exists. Overwrite?", c.outputPath))
+	if err != nil {
+		return err
+	}
+	if !confirm {
+		return fmt.Errorf("aborted: file exists and overwrite declined")
+	}
+	c.force = true
+	return nil
+}
+
+// toOpts converts the command's internal state into an AIFileOpts value.
+func (c *CursorRulesCommand) toOpts() AIFileOpts {
+	return AIFileOpts{
+		Name:           c.name,
+		Description:    c.description,
+		Language:       c.language,
+		BuildTool:      c.buildTool,
+		TestFramework:  c.testFramework,
+		Conventions:    c.conventions,
+		OutputPath:     c.outputPath,
+		Force:          c.force,
+		DryRun:         c.dryRun,
+		NonInteractive: c.nonInteractive,
+	}
 }
 
 func (c *CursorRulesCommand) loadDefaults(tc *terminal.Context) {
@@ -170,7 +189,7 @@ func (c *CursorRulesCommand) validateFlags() error {
 		c.buildTool = "make"
 	}
 	if c.testFramework == "" {
-		c.testFramework = c.defaultTestFramework()
+		c.testFramework = defaultTestFramework(c.language)
 	}
 	return nil
 }
@@ -204,7 +223,7 @@ func (c *CursorRulesCommand) promptUser(tc *terminal.Context) error {
 
 	defaultTest := c.testFramework
 	if defaultTest == "" {
-		defaultTest = c.defaultTestFramework()
+		defaultTest = defaultTestFramework(c.language)
 	}
 	c.testFramework, err = prompter.Optional(fmt.Sprintf("Test framework [%s]:", defaultTest), defaultTest)
 	if err != nil {
@@ -217,65 +236,6 @@ func (c *CursorRulesCommand) promptUser(tc *terminal.Context) error {
 	}
 
 	return nil
-}
-
-func (c *CursorRulesCommand) defaultTestFramework() string {
-	switch strings.ToLower(c.language) {
-	case "go":
-		return "testing"
-	case "python":
-		return "pytest"
-	case "javascript", "typescript":
-		return "jest"
-	case "rust":
-		return "cargo test"
-	case "java":
-		return "junit"
-	default:
-		return "testing"
-	}
-}
-
-func (c *CursorRulesCommand) checkOverwrite(tc *terminal.Context) error {
-	exists, err := fs.Exists(c.outputPath)
-	if err != nil {
-		return fmt.Errorf("failed to check if %s exists: %w", c.outputPath, err)
-	}
-	if !exists {
-		return nil
-	}
-	if c.force {
-		return nil
-	}
-	if c.nonInteractive {
-		return fmt.Errorf("%s already exists. Use --force to overwrite", c.outputPath)
-	}
-	prompter := prompt.NewPrompter(tc.Stdout, os.Stdin)
-	confirm, err := prompter.Confirm(fmt.Sprintf("%s already exists. Overwrite?", c.outputPath))
-	if err != nil {
-		return err
-	}
-	if !confirm {
-		return fmt.Errorf("aborted: file exists and overwrite declined")
-	}
-	return nil
-}
-
-func (c *CursorRulesCommand) buildTemplateData() map[string]interface{} {
-	convList := []string{}
-	if c.conventions != "" {
-		for _, conv := range strings.Split(c.conventions, ",") {
-			convList = append(convList, strings.TrimSpace(conv))
-		}
-	}
-	return map[string]interface{}{
-		"Name":          c.name,
-		"Description":   c.description,
-		"Language":      c.language,
-		"BuildTool":     c.buildTool,
-		"TestFramework": c.testFramework,
-		"Conventions":   convList,
-	}
 }
 
 func (c *CursorRulesCommand) printSuccess(tc *terminal.Context) {
