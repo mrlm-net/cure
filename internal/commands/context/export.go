@@ -116,6 +116,7 @@ func (c *ExportCommand) Run(ctx context.Context, tc *terminal.Context) error {
 		return err
 	}
 
+	c.output = filepath.Clean(c.output)
 	// Ensure parent directory exists before writing.
 	if dir := filepath.Dir(c.output); dir != "." {
 		if err := fs.EnsureDir(dir, 0755); err != nil {
