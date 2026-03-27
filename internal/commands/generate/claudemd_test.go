@@ -453,7 +453,7 @@ func TestClaudeMDCommand_OverwriteProtection(t *testing.T) {
 	}
 }
 
-func TestClaudeMDCommand_DefaultTestFramework(t *testing.T) {
+func TestDefaultTestFramework(t *testing.T) {
 	tests := []struct {
 		language string
 		want     string
@@ -472,10 +472,7 @@ func TestClaudeMDCommand_DefaultTestFramework(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.language, func(t *testing.T) {
-			cmd := &ClaudeMDCommand{
-				language: tt.language,
-			}
-			got := cmd.defaultTestFramework()
+			got := defaultTestFramework(tt.language)
 			if got != tt.want {
 				t.Errorf("defaultTestFramework() = %q, want %q", got, tt.want)
 			}
