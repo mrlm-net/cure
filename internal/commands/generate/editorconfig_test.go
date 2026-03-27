@@ -388,11 +388,12 @@ func TestBuildEditorSections(t *testing.T) {
 			wantGlobs: []string{"*.go", "*.py"}, // expect canonical order: go first
 			wantCount: 2,
 		},
+		// Note: unknown language keys now return an error (tested separately below).
 		{
-			name:      "unknown language is silently skipped",
-			languages: []string{"cobol", "go"},
-			wantGlobs: []string{"*.go"},
-			wantCount: 1,
+			name:      "only known languages",
+			languages: []string{"go", "python"},
+			wantGlobs: []string{"*.go", "*.py"},
+			wantCount: 2,
 		},
 		{
 			name:      "all supported languages",
@@ -403,7 +404,10 @@ func TestBuildEditorSections(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildEditorSections(tt.languages)
+			got, err := buildEditorSections(tt.languages)
+			if err != nil {
+				t.Fatalf("buildEditorSections() unexpected error: %v", err)
+			}
 			if len(got) != tt.wantCount {
 				t.Errorf("buildEditorSections() count = %d, want %d", len(got), tt.wantCount)
 			}
@@ -417,6 +421,16 @@ func TestBuildEditorSections(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBuildEditorSections_UnknownLanguageErrors(t *testing.T) {
+	_, err := buildEditorSections([]string{"cobol", "go"})
+	if err == nil {
+		t.Fatal("buildEditorSections() expected error for unknown language, got nil")
+	}
+	if !strings.Contains(err.Error(), "cobol") {
+		t.Errorf("error %q should mention the unknown language key", err.Error())
 	}
 }
 

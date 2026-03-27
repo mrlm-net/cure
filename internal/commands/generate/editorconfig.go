@@ -111,8 +111,8 @@ func (c *EditorconfigCommand) Run(ctx context.Context, tc *terminal.Context) err
 		}
 	}
 
-	// Interactive mode: show MultiSelect menu
-	if !c.nonInteractive {
+	// Interactive mode: show MultiSelect menu (only when stdin is a TTY).
+	if !c.nonInteractive && prompt.IsInteractive(os.Stdin) {
 		selected, err := c.promptLanguages(tc)
 		if err != nil {
 			return err
@@ -158,7 +158,10 @@ func GenerateEditorconfig(ctx context.Context, w io.Writer, opts EditorconfigOpt
 	}
 
 	// Build sections in canonical order for deterministic output.
-	sections := buildEditorSections(opts.Languages)
+	sections, err := buildEditorSections(opts.Languages)
+	if err != nil {
+		return err
+	}
 
 	data := map[string]interface{}{
 		"Sections": sections,
@@ -194,10 +197,17 @@ func GenerateEditorconfig(ctx context.Context, w io.Writer, opts EditorconfigOpt
 
 // buildEditorSections returns the EditorSection list for the given language keys,
 // preserving editorConfigLanguageOrder for deterministic section ordering.
-// Unknown language keys are silently skipped.
-func buildEditorSections(languages []string) []EditorSection {
+// Returns an error if any language key is not recognised.
+func buildEditorSections(languages []string) ([]EditorSection, error) {
 	if len(languages) == 0 {
-		return nil
+		return nil, nil
+	}
+
+	// Validate all keys up front so we never produce partial output.
+	for _, lang := range languages {
+		if _, ok := editorConfigRules[lang]; !ok {
+			return nil, fmt.Errorf("unknown language %q (valid: %s)", lang, strings.Join(editorConfigLanguageOrder, ", "))
+		}
 	}
 
 	// Build lookup set from requested languages.
@@ -210,12 +220,10 @@ func buildEditorSections(languages []string) []EditorSection {
 	sections := make([]EditorSection, 0, len(languages))
 	for _, key := range editorConfigLanguageOrder {
 		if requested[key] {
-			if section, ok := editorConfigRules[key]; ok {
-				sections = append(sections, section)
-			}
+			sections = append(sections, editorConfigRules[key])
 		}
 	}
-	return sections
+	return sections, nil
 }
 
 // printEditorconfigSuccess writes the post-generation success message to w.
