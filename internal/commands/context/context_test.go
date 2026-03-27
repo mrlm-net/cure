@@ -46,3 +46,17 @@ func TestNewContextCommand_ListForkDeleteRegistered(t *testing.T) {
 		}
 	}
 }
+
+func TestNewContextCommand_SearchRegistered(t *testing.T) {
+	st := newMockStore()
+	cmd := NewContextCommand(st)
+
+	router, ok := cmd.(*terminal.Router)
+	if !ok {
+		t.Skip("NewContextCommand does not return *terminal.Router — cannot inspect registrations")
+	}
+
+	if _, found := router.Lookup("search"); !found {
+		t.Error("expected 'search' subcommand to be registered")
+	}
+}
