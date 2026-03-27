@@ -279,6 +279,13 @@ func TestFirstExcerpt(t *testing.T) {
 			maxLen:  30,
 			wantIn:  "...",
 		},
+		{
+			name:    "multi-byte UTF-8 content does not panic or produce garbled output",
+			content: strings.Repeat("一", 15) + "身份验证" + strings.Repeat("二", 15),
+			query:   "身份验证",
+			maxLen:  20,
+			wantIn:  "身份验证",
+		},
 	}
 
 	for _, tt := range tests {

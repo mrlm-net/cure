@@ -55,7 +55,6 @@ type searchMatch struct {
 // whose history contains the query, and prints the results.
 func (c *SearchCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	if len(tc.Args) == 0 {
-		fmt.Fprintln(tc.Stderr, c.Usage())
 		return fmt.Errorf("context search: missing required <query> argument")
 	}
 	query := tc.Args[0]
@@ -106,34 +105,58 @@ func searchSessions(sessions []*agent.Session, query string) []searchMatch {
 }
 
 // firstExcerpt returns a short excerpt from content centred around the first
-// occurrence of query (case-insensitive), truncated to maxLen characters.
+// occurrence of query (case-insensitive), truncated to maxLen runes.
 // Leading/trailing ellipses are added when the excerpt does not start/end at
-// the content boundaries.
+// the content boundaries. Uses rune-based indexing to avoid splitting
+// multi-byte UTF-8 sequences (e.g. CJK characters, emoji).
 func firstExcerpt(content, query string, maxLen int) string {
-	lower := strings.ToLower(content)
-	idx := strings.Index(lower, strings.ToLower(query))
+	const leadingContext = 20
+
+	runes := []rune(content)
+	lowerRunes := []rune(strings.ToLower(content))
+	queryRunes := []rune(strings.ToLower(query))
+
+	// Find the first rune-index where the query matches.
+	idx := -1
+	for i := range runes {
+		if i+len(queryRunes) > len(runes) {
+			break
+		}
+		match := true
+		for j, qr := range queryRunes {
+			if lowerRunes[i+j] != qr {
+				match = false
+				break
+			}
+		}
+		if match {
+			idx = i
+			break
+		}
+	}
+
 	if idx < 0 {
 		// query not found (shouldn't happen in normal flow); return prefix
-		if len(content) > maxLen {
-			return content[:maxLen] + "..."
+		if len(runes) > maxLen {
+			return string(runes[:maxLen]) + "..."
 		}
 		return content
 	}
 
-	start := idx - 20
+	start := idx - leadingContext
 	if start < 0 {
 		start = 0
 	}
 	end := start + maxLen
-	if end > len(content) {
-		end = len(content)
+	if end > len(runes) {
+		end = len(runes)
 	}
 
-	result := content[start:end]
+	result := string(runes[start:end])
 	if start > 0 {
 		result = "..." + result
 	}
-	if end < len(content) {
+	if end < len(runes) {
 		result = result + "..."
 	}
 	return result
