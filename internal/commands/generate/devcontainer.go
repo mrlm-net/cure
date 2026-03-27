@@ -2,11 +2,13 @@ package generate
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/mrlm-net/cure/pkg/fs"
@@ -14,6 +16,10 @@ import (
 	"github.com/mrlm-net/cure/pkg/template"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
+
+// baseImagePattern validates Docker image references.
+// Permits registry/namespace/name:tag@digest forms; rejects newlines and quotes.
+var baseImagePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/:\-@]*$`)
 
 const (
 	devcontainerDefaultName      = "dev"
@@ -64,6 +70,30 @@ func parseCSV(s string) []string {
 	return out
 }
 
+// devcontainerJSON is the Go representation of .devcontainer/devcontainer.json.
+// Using a typed struct instead of text/template ensures encoding/json handles
+// all string escaping, preventing JSON injection via user-controlled fields.
+type devcontainerJSON struct {
+	Name              string                    `json:"name"`
+	Build             *devcontainerBuild        `json:"build,omitempty"`
+	Image             string                    `json:"image,omitempty"`
+	Features          map[string]interface{}    `json:"features"`
+	Customizations    devcontainerCustomizations `json:"customizations"`
+	PostCreateCommand string                    `json:"postCreateCommand,omitempty"`
+}
+
+type devcontainerBuild struct {
+	Dockerfile string `json:"dockerfile"`
+}
+
+type devcontainerCustomizations struct {
+	VSCode devcontainerVSCode `json:"vscode"`
+}
+
+type devcontainerVSCode struct {
+	Extensions []string `json:"extensions"`
+}
+
 // GenerateDevcontainer generates devcontainer configuration files according to
 // opts. Output is written to opts.OutputDir; dry-run output is written to w.
 func GenerateDevcontainer(ctx context.Context, w io.Writer, opts DevcontainerOpts) error {
@@ -78,26 +108,39 @@ func GenerateDevcontainer(ctx context.Context, w io.Writer, opts DevcontainerOpt
 		opts.BaseImage = devcontainerDefaultBaseImage
 	}
 
+	// Validate base image format to prevent Dockerfile injection.
+	if opts.BaseImage != "" && !baseImagePattern.MatchString(opts.BaseImage) {
+		return fmt.Errorf("invalid --base-image %q: must match registry/name:tag format", opts.BaseImage)
+	}
+
 	// Resolve the base image used in the Dockerfile stub.
 	dockerfileBaseImage := opts.BaseImage
 	if opts.UseDockerfile && dockerfileBaseImage == "" {
 		dockerfileBaseImage = devcontainerDockerfileBase
 	}
 
-	// Build template data.
-	data := map[string]interface{}{
-		"Name":              opts.Name,
-		"BaseImage":         opts.BaseImage,
-		"UseDockerfile":     opts.UseDockerfile,
-		"Extensions":        parseCSV(opts.Extensions),
-		"PostCreateCommand": opts.PostCreateCommand,
+	// Build devcontainer.json using encoding/json for correct string escaping.
+	exts := parseCSV(opts.Extensions)
+	cfg := devcontainerJSON{
+		Name:     opts.Name,
+		Features: map[string]interface{}{},
+		Customizations: devcontainerCustomizations{
+			VSCode: devcontainerVSCode{
+				Extensions: exts,
+			},
+		},
+		PostCreateCommand: opts.PostCreateCommand,
 	}
-
-	// Render devcontainer.json template.
-	devcontainerContent, err := template.Render("devcontainer", data)
+	if opts.UseDockerfile {
+		cfg.Build = &devcontainerBuild{Dockerfile: "Dockerfile"}
+	} else {
+		cfg.Image = opts.BaseImage
+	}
+	jsonBytes, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return fmt.Errorf("render devcontainer template: %w", err)
+		return fmt.Errorf("marshal devcontainer.json: %w", err)
 	}
+	devcontainerContent := string(jsonBytes) + "\n"
 
 	devcontainerPath := filepath.Join(opts.OutputDir, "devcontainer.json")
 

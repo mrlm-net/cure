@@ -291,6 +291,60 @@ func TestDevcontainerCommand_OverwriteProtection(t *testing.T) {
 	}
 }
 
+func TestDevcontainerCommand_InvalidBaseImage(t *testing.T) {
+	tests := []struct {
+		name    string
+		image   string
+		wantErr bool
+	}{
+		{name: "valid image", image: "mcr.microsoft.com/devcontainers/go:1", wantErr: false},
+		{name: "newline injection", image: "ubuntu\nRUN echo pwned", wantErr: true},
+		{name: "quote injection", image: `ubuntu"malicious`, wantErr: true},
+		{name: "space injection", image: "ubuntu malicious", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			var w bytes.Buffer
+			err := GenerateDevcontainer(context.Background(), &w, DevcontainerOpts{
+				NonInteractive: true,
+				Name:           "test",
+				BaseImage:      tt.image,
+				OutputDir:      tmpDir,
+			})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GenerateDevcontainer() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDevcontainerCommand_JSONInjectionResistance(t *testing.T) {
+	// Verify that user-controlled fields with special JSON characters produce
+	// valid JSON and do not inject keys or break JSON structure.
+	tmpDir := t.TempDir()
+	var w bytes.Buffer
+	err := GenerateDevcontainer(context.Background(), &w, DevcontainerOpts{
+		NonInteractive:    true,
+		Name:              `name","injected":"evil`,
+		PostCreateCommand: `cmd" && rm -rf /`,
+		Extensions:        `ext","malicious":"true`,
+		OutputDir:         tmpDir,
+	})
+	if err != nil {
+		t.Fatalf("GenerateDevcontainer() unexpected error: %v", err)
+	}
+	content := readFileContents(t, filepath.Join(tmpDir, "devcontainer.json"))
+	assertValidJSON(t, content)
+	if strings.Contains(content, `"injected"`) {
+		t.Error("JSON injection succeeded via Name field — output contains injected key")
+	}
+	if strings.Contains(content, `"malicious"`) {
+		t.Error("JSON injection succeeded via Extensions field — output contains injected key")
+	}
+}
+
 func TestDevcontainerCommand_MissingNameNonInteractive(t *testing.T) {
 	// The --name flag defaults to "dev", so an explicit empty value must be
 	// tested by bypassing the flag default through DevcontainerOpts directly.
