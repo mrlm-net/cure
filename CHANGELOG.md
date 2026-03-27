@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `pkg/doctor` — public reusable health-check framework extracted from `internal/commands/doctor`; zero imports from `internal/` or `cmd/`
+- `pkg/doctor`: `CheckFunc` type — `func() CheckResult`; follows `http.HandlerFunc` pattern for extensible, composable checks
+- `pkg/doctor`: `CheckResult` struct with `Name`, `Status`, and `Message` fields
+- `pkg/doctor`: `CheckStatus` constants — `CheckPass`, `CheckWarn`, `CheckFail`
+- `pkg/doctor`: `Run(checks []CheckFunc, w io.Writer) (passed, warned, failed int)` — executes checks in order, formats results with ANSI styling, recovers panics (panicking checks recorded as `CheckFail`; remaining checks continue to run)
+- `pkg/doctor`: `BuiltinChecks() []CheckFunc` — returns the 7 default health checks in canonical order; new slice per call to prevent mutation by callers
+- `internal/commands/doctor`: refactored to thin adapter over `pkg/doctor`; type aliases (`CheckFunc`, `CheckResult`, `CheckStatus`) and var aliases for built-in checks preserve backward compatibility for internal tests
+- `cure context search <query> [--format table|ndjson]` — case-insensitive substring search across all saved session message history; reports ID, provider, creation time, match count, and a short excerpt from the first match per session
+- `cure context search`: `firstExcerpt` — rune-based UTF-8–safe excerpt windowing (80 runes, 20 rune leading context); adds leading/trailing ellipses when the window does not cover content boundaries
+- `cure context search --format ndjson` — one JSON object per matching session with fields `id`, `provider`, `created_at`, `match_count`, `excerpt`
+- `cure context export <session-id> [--format markdown|ndjson] [--output <file>]` — read-only export of a saved session; never mutates the session in the store
+- `cure context export`: Markdown format — H1 heading with session ID, metadata table (Provider, Model, Created, Updated, Fork of), H2 section per message with role as heading
+- `cure context export`: NDJSON format — single compact JSON object followed by a newline; compatible with `jq` in line-by-line mode
+- `cure context export --output <file>` — writes output to a file via `pkg/fs.AtomicWrite`; creates parent directories with `pkg/fs.EnsureDir`; flags must precede the positional argument
+- `cure init [flags]` — interactive wizard that bootstraps a complete project scaffold in a single command; continues on failure and prints a `ok <component>` / `x <component>: <error>` summary
+- `cure init` interactive mode — prompts for project name (`Required`), language (`SingleSelect`: Go, Node.js, Python, Rust, Other), AI assistant files (`MultiSelect`), devcontainer, CI workflow, editorconfig, gitignore
+- `cure init --non-interactive` — accepts all values from flags; `--name` and `--language` are required; defaults all infrastructure components to enabled; defaults `--ai-tools` to all six AI file generators
+- `cure init --ai-tools <ids>` — comma-separated subset of `claude-md,agents-md,copilot-instructions,cursor-rules,windsurf-rules,gemini-md`; validated before any generator runs
+- `cure init --devcontainer`, `--ci`, `--editorconfig`, `--gitignore` — boolean flags (default `true`) to opt out individual infrastructure components in non-interactive mode
+- `cure init --dry-run` — previews all generator output without touching the filesystem
+- `cure init --force` — passes `--force` to every generator; overwrites existing files without prompting
+
 ## [0.7.0] - 2026-03-27
 
 ### Added

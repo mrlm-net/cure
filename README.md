@@ -8,11 +8,12 @@
 
 Cure automates repetitive development tasks through AI context management, code generation, and network diagnostics. Manage multi-turn AI conversations from the terminal (`cure context`), generate templates for AI assistants (`CLAUDE.md`), trace HTTP/TCP/UDP connections with detailed timing and metadata, and output results in developer-friendly formats (NDJSON, HTML). Built with minimal external dependencies and only Go's standard library for core functionality, cure is designed as a foundation for developers who need reliable, auditable tooling without dependency bloat.
 
-The project is under active development — currently at v0.7.0 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
+The project is under active development — currently at v0.8.0 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
 
 ## Key Features
 
-- **AI context management** — Start, resume, list, fork, and delete multi-turn AI conversations from the terminal; sessions are persisted to `~/.local/share/cure/sessions/` and work with any registered provider
+- **Project bootstrapping** — `cure init` bootstraps a complete project scaffold in one command: AI assistant files, devcontainer, CI workflow, editorconfig, and gitignore; interactive wizard or fully flag-driven for CI use
+- **AI context management** — Start, resume, list, fork, delete, search, and export multi-turn AI conversations from the terminal; sessions are persisted to `~/.local/share/cure/sessions/` and work with any registered provider
 - **Template generation** — Create `CLAUDE.md` project context files for AI assistants with interactive or flag-driven configuration; `--dry-run` prints output to stdout without writing files
 - **Network tracing** — Trace HTTP requests (DNS resolution, TLS handshake, response timing), TCP connections, and UDP packet exchanges with detailed event streams
 - **Flexible output** — Export data as NDJSON for log aggregation or HTML for visual inspection with syntax-highlighted JSON payloads
@@ -44,6 +45,18 @@ make build
 ```
 
 ## Quick Start
+
+Bootstrap a new project with all standard configuration files in one pass:
+
+```sh
+cure init
+```
+
+Or fully non-interactive for CI and scripted environments:
+
+```sh
+cure init --non-interactive --name myapp --language go
+```
 
 Start an AI conversation session (requires `ANTHROPIC_API_KEY`):
 
@@ -81,6 +94,60 @@ source <(cure completion bash)
 
 - `cure version` — Display version and build information
 - `cure help [command]` — Show help for cure or a specific command
+- `cure init [flags]` — Bootstrap a complete project scaffold in one command (see [Project Bootstrapping](#project-bootstrapping))
+
+### Project Bootstrapping
+
+`cure init` generates all standard configuration files for a new project in a single interactive wizard or fully non-interactive pass. All generators run regardless of individual failures; a summary is printed at the end.
+
+**Interactive mode** (default when stdin is a terminal):
+
+```sh
+cure init
+```
+
+Prompts for project name, primary language, which AI assistant files to generate, and whether to include devcontainer, CI workflow, editorconfig, and gitignore.
+
+**Non-interactive mode** (for CI and scripts):
+
+```sh
+# Bootstrap a Go project with all defaults
+cure init --non-interactive --name myapp --language go
+
+# Select a subset of AI assistant files
+cure init --non-interactive --name myapp --language go \
+  --ai-tools claude-md,cursor-rules
+
+# Preview without writing any files
+cure init --non-interactive --name myapp --language go --dry-run
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--non-interactive` | `false` | Skip prompts; use flag values |
+| `--dry-run` | `false` | Preview output without writing files |
+| `--force` | `false` | Overwrite existing files |
+| `--name` | *(required in non-interactive)* | Project name |
+| `--language` | *(required in non-interactive)* | Primary language: `go`, `node`, `python`, `rust`, `other` |
+| `--ai-tools` | all | Comma-separated AI tool IDs to generate |
+| `--devcontainer` | `true` | Generate `.devcontainer/devcontainer.json` |
+| `--ci` | `true` | Generate `.github/workflows/ci.yml` |
+| `--editorconfig` | `true` | Generate `.editorconfig` |
+| `--gitignore` | `true` | Generate `.gitignore` |
+
+**AI tool IDs** accepted by `--ai-tools`: `claude-md`, `agents-md`, `copilot-instructions`, `cursor-rules`, `windsurf-rules`, `gemini-md`.
+
+**Summary output** — after all generators have run, `cure init` prints a per-component result:
+
+```
+cure init summary:
+  ok claude-md
+  ok cursor-rules
+  ok devcontainer
+  x ci: open .github/workflows/ci.yml: permission denied
+```
 
 ### AI Context Management
 
@@ -89,9 +156,38 @@ source <(cure completion bash)
 - `cure context list [--format text|ndjson]` — List saved sessions sorted newest-first
 - `cure context fork <id>` — Deep-copy a session with a new ID; prints the forked ID to stdout
 - `cure context delete [--yes] <id>` — Delete a session (prompts for confirmation unless `--yes` is supplied)
+- `cure context search <query> [--format table|ndjson]` — Search all session history for messages containing the query (case-insensitive); reports ID, provider, creation time, match count, and an excerpt
+- `cure context export <session-id> [--format markdown|ndjson] [--output <file>]` — Export a session as Markdown (default) or NDJSON; read-only, never mutates the session
 - `cure context` *(no args)* — Enter REPL mode for interactive multi-turn conversation
 
 Sessions are stored in `~/.local/share/cure/sessions/` (XDG-compliant). Set `ANTHROPIC_API_KEY` before using the `claude` provider.
+
+#### Searching session history
+
+```sh
+# Find sessions discussing authentication — table output
+cure context search "authentication"
+
+# Machine-readable output for scripting
+cure context search "bug fix" --format ndjson
+```
+
+The table output shows `ID`, `PROVIDER`, `CREATED`, `MATCHES`, and `EXCERPT` columns. The excerpt is centred around the first match and is UTF-8 safe (rune-based windowing).
+
+#### Exporting sessions
+
+```sh
+# Export to Markdown on stdout
+cure context export abc123
+
+# Export as NDJSON (one JSON object)
+cure context export abc123 --format ndjson
+
+# Write Markdown to a file (note: flags before the session ID)
+cure context export --output session.md abc123
+```
+
+The Markdown export produces an H1 heading with the session ID, a metadata table (Provider, Model, Created, Updated, Fork of), and an H2 section per message with the role as heading.
 
 The `cure context` commands are backed by [`pkg/agent`](#pkgagent) and [`pkg/agent/store`](#pkgagentstore--json-file-store) — see those sections if you want to embed session management into your own Go programs.
 
@@ -141,7 +237,7 @@ Cure is built on three core principles: **zero external dependencies**, **reusab
 
 **Zero dependencies** — cure uses only Go's standard library. This eliminates supply chain risk, reduces build times, simplifies audits, and ensures cure remains buildable and maintainable for years without dependency updates. The tradeoff is implementing more functionality from scratch, but the benefits outweigh the cost for a foundational tool.
 
-**Reusable packages** — the `pkg/` directory contains independently useful libraries that any Go project can import: `pkg/terminal` for CLI routing and flag parsing, `pkg/config` for hierarchical configuration merging, `pkg/tracer` for network event tracing, `pkg/template` for embedded template rendering, `pkg/mcp` for building stdlib-only MCP (Model Context Protocol) servers with stdio and HTTP Streamable transports, `pkg/agent` for provider-agnostic AI agent context management, `pkg/prompt` for interactive terminal prompts, `pkg/fs` for atomic filesystem operations, `pkg/style` for ANSI terminal styling with NO_COLOR support, and `pkg/env` for cached runtime environment detection. Each package follows a single responsibility and can be used without importing cure's application logic.
+**Reusable packages** — the `pkg/` directory contains independently useful libraries that any Go project can import: `pkg/terminal` for CLI routing and flag parsing, `pkg/config` for hierarchical configuration merging, `pkg/tracer` for network event tracing, `pkg/template` for embedded template rendering, `pkg/mcp` for building stdlib-only MCP (Model Context Protocol) servers with stdio and HTTP Streamable transports, `pkg/agent` for provider-agnostic AI agent context management, `pkg/prompt` for interactive terminal prompts, `pkg/fs` for atomic filesystem operations, `pkg/style` for ANSI terminal styling with NO_COLOR support, `pkg/env` for cached runtime environment detection, and `pkg/doctor` for composable project health checks. Each package follows a single responsibility and can be used without importing cure's application logic.
 
 **Minimal abstraction** — cure favors composition over complex abstractions. Commands implement a simple interface (`Name()`, `Description()`, `Usage()`, `Flags()`, `Run()`), configuration is plain `map[string]interface{}` with dot-notation access, and the router dispatches commands without heavy middleware stacks. This keeps the codebase readable and debuggable.
 
@@ -675,6 +771,81 @@ if env.IsGitRepo() {
 }
 ```
 
+## pkg/doctor
+
+`pkg/doctor` provides a public framework for running project health checks. The `cure doctor` command is built on top of this package, but any Go program can use it directly — either running the built-in checks or composing a custom suite.
+
+Import path: `github.com/mrlm-net/cure/pkg/doctor`
+
+### Core types
+
+```go
+// CheckFunc is the check unit — a plain function with no parameters.
+type CheckFunc func() CheckResult
+
+// CheckResult holds the name, status, and a human-readable message for one check.
+type CheckResult struct {
+    Name    string
+    Status  CheckStatus
+    Message string
+}
+
+// CheckStatus values: CheckPass, CheckWarn, CheckFail.
+type CheckStatus int
+```
+
+### Running checks
+
+`Run` executes a slice of `CheckFunc` values, writes a formatted and ANSI-styled line for each result, and returns tallies by status. Panicking checks are recovered and recorded as `CheckFail`; the remaining checks in the slice continue to run.
+
+```go
+import (
+    "os"
+    "github.com/mrlm-net/cure/pkg/doctor"
+)
+
+checks := doctor.BuiltinChecks() // 7 default checks
+passed, warned, failed := doctor.Run(checks, os.Stdout)
+if failed > 0 {
+    os.Exit(1)
+}
+```
+
+### Extending with custom checks
+
+Append any `CheckFunc` to the slice before calling `Run`:
+
+```go
+checks := doctor.BuiltinChecks()
+
+// Add a project-specific check.
+checks = append(checks, func() doctor.CheckResult {
+    ok, _ := fs.Exists("api/openapi.yaml")
+    if ok {
+        return doctor.CheckResult{Name: "OpenAPI", Status: doctor.CheckPass, Message: "api/openapi.yaml found"}
+    }
+    return doctor.CheckResult{Name: "OpenAPI", Status: doctor.CheckFail, Message: "api/openapi.yaml missing"}
+})
+
+doctor.Run(checks, os.Stdout)
+```
+
+### Built-in checks
+
+`BuiltinChecks()` returns the 7 default checks in canonical order:
+
+| Check | Pass condition | Fail/Warn |
+|-------|---------------|-----------|
+| README | `README.md` or `README` present | Fail |
+| Tests | `*_test.go` files or `tests/` directory | Fail |
+| CI Config | `.github/workflows/`, `.gitlab-ci.yml`, or `.circleci/` | Fail |
+| .gitignore | `.gitignore` present | Warn |
+| CLAUDE.md | `CLAUDE.md` present | Fail |
+| Build Tool | `Makefile`, `package.json`, `Cargo.toml`, or `build.gradle` | Fail |
+| Dependency Manifest | `go.mod`, `package.json`, `requirements.txt`, or `Cargo.toml` | Fail |
+
+A new slice is returned on each call to `BuiltinChecks()` so callers can safely mutate it without affecting other callers.
+
 ## Development
 
 ### Prerequisites
@@ -720,10 +891,11 @@ For detailed guidance, see `CLAUDE.md` in the repository root.
 
 ## Roadmap
 
-Cure is currently at v0.7.0. The v0.7.0 release added five new `cure generate` subcommands — `scaffold`, `devcontainer`, `editorconfig`, `gitignore`, and `github-workflow` — completing the Generation & Scaffolding epic. The v0.6.x series delivered the developer experience foundation: `pkg/prompt`, `pkg/fs`, `pkg/style`, and `pkg/env` as standalone reusable packages; the `cure doctor` command with 7 health checks; `--dry-run` for `cure generate`; and custom template directory support in `pkg/template`.
+Cure is currently at v0.8.0. The v0.8.0 release delivered project bootstrapping (`cure init`) and three enhancements to session management (`cure context search`, `cure context export`, `pkg/doctor` extraction). The v0.7.0 release added five `cure generate` subcommands — `scaffold`, `devcontainer`, `editorconfig`, `gitignore`, and `github-workflow` — completing the Generation & Scaffolding epic.
 
 Earlier milestones:
 
+- **v0.7.0** — Generation & Scaffolding: `cure generate scaffold`, `cure generate devcontainer`, `cure generate editorconfig`, `cure generate gitignore`, `cure generate github-workflow`; programmatic `Generate*` API for all AI-file subcommands
 - **v0.6.x** — Developer experience foundation: `pkg/prompt`, `pkg/fs`, `pkg/style`, `pkg/env`; `cure doctor`; AI assistant template subcommands (`agents-md`, `copilot-instructions`, `cursor-rules`, `windsurf-rules`, `gemini-md`)
 - **v0.5.0** — `pkg/agent`: provider-agnostic AI agent context management, `cure context` command group, Anthropic Claude adapter
 - **v0.4.x** — `pkg/mcp` for stdlib-only MCP server implementation, shell auto-completion
@@ -731,7 +903,6 @@ Earlier milestones:
 
 Upcoming milestones:
 
-- **v0.8.0** — Project bootstrapping (`cure init`), enhanced `cure doctor` with auto-fix suggestions
 - **v0.9.0** — Multi-provider AI support, `cure mcp serve` for serving cure as an MCP tool
 - **v1.0.0** — API stability for all `pkg/` packages; freeze of breaking changes
 
