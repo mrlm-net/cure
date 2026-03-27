@@ -159,13 +159,13 @@ func renderMarkdown(s *agent.Session) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// renderNDJSON serialises the session as a single pretty-printed JSON object
-// followed by a newline. Using json.Encoder ensures the output is terminated
-// with a newline, consistent with the NDJSON convention used elsewhere.
+// renderNDJSON serialises the session as a single compact JSON object followed
+// by a newline. json.Encoder (without SetIndent) produces one object per line,
+// which is consistent with the NDJSON spec and compatible with streaming tools
+// such as jq when used in line-by-line mode.
 func renderNDJSON(s *agent.Session) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
-	enc.SetIndent("", "  ")
 	if err := enc.Encode(s); err != nil {
 		return nil, err
 	}
