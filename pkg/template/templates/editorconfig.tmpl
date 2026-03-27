@@ -1,0 +1,19 @@
+# EditorConfig — https://editorconfig.org
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+{{range .Sections}}
+[{{.Glob}}]
+indent_style = {{.IndentStyle}}
+indent_size = {{.IndentSize}}
+end_of_line = {{.EndOfLine}}
+charset = {{.Charset}}
+trim_trailing_whitespace = {{.TrimTrailingWhitespace}}
+insert_final_newline = {{.InsertFinalNewline}}
+{{end}}
