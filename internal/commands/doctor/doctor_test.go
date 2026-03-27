@@ -467,8 +467,8 @@ func TestDoctorCommand_Metadata(t *testing.T) {
 	if cmd.Usage() == "" {
 		t.Error("Usage() must not be empty")
 	}
-	if cmd.Flags() != nil {
-		t.Error("Flags() must return nil — doctor accepts no flags")
+	if cmd.Flags() == nil {
+		t.Error("Flags() must return a non-nil FlagSet — doctor accepts --no-custom")
 	}
 }
 
