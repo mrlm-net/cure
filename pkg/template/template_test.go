@@ -437,6 +437,7 @@ func TestMissingDirectorySkippedSilently(t *testing.T) {
 
 // TestConfigDirsIntegration verifies template.dirs from config adds extra search paths.
 func TestConfigDirsIntegration(t *testing.T) {
+	resetRegistry()
 	tmpDir := t.TempDir()
 
 	// Create a config-specified extra directory
@@ -465,7 +466,9 @@ func TestConfigDirsIntegration(t *testing.T) {
 	})
 
 	cfg := config.NewConfig(config.ConfigObject{
-		"template.dirs": []interface{}{extraDir},
+		"template": map[string]interface{}{
+			"dirs": []interface{}{extraDir},
+		},
 	})
 	SetConfig(cfg)
 

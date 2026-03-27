@@ -1,0 +1,228 @@
+package generate
+
+// gitignoreProfileEntry holds the display label and canonical patterns for a profile.
+type gitignoreProfileEntry struct {
+	Label    string
+	Patterns []string
+}
+
+// gitignoreProfiles maps profile keys to their display label and pattern slice.
+// Patterns are canonical representations commonly seen in .gitignore files for each ecosystem.
+var gitignoreProfiles = map[string]gitignoreProfileEntry{
+	"go": {
+		Label: "Go",
+		Patterns: []string{
+			"# Go",
+			"*.exe",
+			"*.exe~",
+			"*.dll",
+			"*.so",
+			"*.dylib",
+			"*.test",
+			"*.out",
+			"go.work",
+			"go.work.sum",
+			"# Go workspace",
+			"vendor/",
+		},
+	},
+	"node": {
+		Label: "Node.js",
+		Patterns: []string{
+			"# Node.js",
+			"node_modules/",
+			"npm-debug.log*",
+			"yarn-debug.log*",
+			"yarn-error.log*",
+			".pnpm-debug.log*",
+			".npm",
+			".yarn/cache",
+			".yarn/unplugged",
+			".yarn/build-state.yml",
+			".pnp.*",
+			"dist/",
+			"build/",
+			".env.local",
+			".env.*.local",
+		},
+	},
+	"python": {
+		Label: "Python",
+		Patterns: []string{
+			"# Python",
+			"__pycache__/",
+			"*.py[cod]",
+			"*$py.class",
+			"*.so",
+			".Python",
+			"build/",
+			"develop-eggs/",
+			"dist/",
+			"downloads/",
+			"eggs/",
+			".eggs/",
+			"lib/",
+			"lib64/",
+			"parts/",
+			"sdist/",
+			"var/",
+			"wheels/",
+			"*.egg-info/",
+			".installed.cfg",
+			"*.egg",
+			".env",
+			".venv",
+			"env/",
+			"venv/",
+			".pytest_cache/",
+		},
+	},
+	"rust": {
+		Label: "Rust",
+		Patterns: []string{
+			"# Rust",
+			"debug/",
+			"target/",
+			"Cargo.lock",
+			"**/*.rs.bk",
+			"*.pdb",
+		},
+	},
+	"java": {
+		Label: "Java",
+		Patterns: []string{
+			"# Java",
+			"*.class",
+			"*.log",
+			"*.ctxt",
+			".mtj.tmp/",
+			"*.jar",
+			"*.war",
+			"*.nar",
+			"*.ear",
+			"*.zip",
+			"*.tar.gz",
+			"*.rar",
+			"hs_err_pid*",
+			"replay_pid*",
+		},
+	},
+	"macos": {
+		Label: "macOS",
+		Patterns: []string{
+			"# macOS",
+			".DS_Store",
+			".AppleDouble",
+			".LSOverride",
+			"Icon",
+			"._*",
+			".DocumentRevisions-V100",
+			".fseventsd",
+			".Spotlight-V100",
+			".TemporaryItems",
+			".Trashes",
+			".VolumeIcon.icns",
+			".com.apple.timemachine.donotpresent",
+			".AppleDB",
+			".AppleDesktop",
+			"Network Trash Folder",
+			"Temporary Items",
+			".apdisk",
+		},
+	},
+	"windows": {
+		Label: "Windows",
+		Patterns: []string{
+			"# Windows",
+			"Thumbs.db",
+			"Thumbs.db:encryptable",
+			"ehthumbs.db",
+			"ehthumbs_vista.db",
+			"*.stackdump",
+			"[Dd]esktop.ini",
+			"$RECYCLE.BIN/",
+			"*.cab",
+			"*.msi",
+			"*.msix",
+			"*.msm",
+			"*.msp",
+			"*.lnk",
+		},
+	},
+	"linux": {
+		Label: "Linux",
+		Patterns: []string{
+			"# Linux",
+			"*~",
+			".fuse_hidden*",
+			".directory",
+			".Trash-*",
+			".nfs*",
+		},
+	},
+	"jetbrains": {
+		Label: "JetBrains IDEs",
+		Patterns: []string{
+			"# JetBrains",
+			".idea/",
+			"*.iws",
+			"*.iml",
+			"*.ipr",
+			"out/",
+			"!**/src/main/**/out/",
+			"!**/src/test/**/out/",
+		},
+	},
+	"vscode": {
+		Label: "VS Code",
+		Patterns: []string{
+			"# VS Code",
+			".vscode/*",
+			"!.vscode/settings.json",
+			"!.vscode/tasks.json",
+			"!.vscode/launch.json",
+			"!.vscode/extensions.json",
+			"!.vscode/*.code-snippets",
+			".history/",
+			"*.vsix",
+		},
+	},
+	"vim": {
+		Label: "Vim/Emacs",
+		Patterns: []string{
+			"# Vim",
+			"*~",
+			"*.swp",
+			"*.swo",
+			".netrwhist",
+			"# Emacs",
+			"\\#*\\#",
+			"/.emacs.desktop",
+			"/.emacs.desktop.lock",
+			"*.elc",
+			"auto-save-list",
+			"tramp",
+			".#*",
+		},
+	},
+}
+
+// gitignoreProfileOrder defines the MultiSelect menu order and the order
+// in which profile sections appear in the generated output.
+var gitignoreProfileOrder = []string{
+	"go", "node", "python", "rust", "java",
+	"macos", "windows", "linux", "jetbrains", "vscode", "vim",
+}
+
+// universalPatterns are always included in the universal section regardless of
+// which profiles are selected. They cover common temporary and log files.
+var universalPatterns = []string{
+	"# Universal",
+	".env",
+	"*.log",
+	"*.tmp",
+	"*.temp",
+	".cache/",
+	"tmp/",
+	"temp/",
+}
