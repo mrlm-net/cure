@@ -100,6 +100,7 @@ func writeAIFile(ctx context.Context, w io.Writer, opts AIFileOpts, templateName
 	if opts.OutputPath == "" {
 		opts.OutputPath = fallbackPath
 	}
+	opts.OutputPath = filepath.Clean(opts.OutputPath)
 
 	data := buildAIFileTemplateData(opts)
 	output, err := template.Render(templateName, data)

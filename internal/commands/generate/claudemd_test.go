@@ -284,7 +284,9 @@ func TestClaudeMDCommand_DryRun(t *testing.T) {
 			wantErr:     false,
 			checkNoFile: false, // not checking tmp dir; just checking stdout
 			checkOutput: func(t *testing.T, stdout string) {
-				if !strings.Contains(stdout, "# Dry run mode: would write to ./CLAUDE.md") {
+				// filepath.Clean strips the leading "./" — accept "CLAUDE.md" or "./CLAUDE.md".
+				if !strings.Contains(stdout, "# Dry run mode: would write to") ||
+					!strings.Contains(stdout, "CLAUDE.md") {
 					t.Errorf("Dry-run header should show default path; got stdout:\n%s", stdout)
 				}
 			},
