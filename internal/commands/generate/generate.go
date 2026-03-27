@@ -16,5 +16,8 @@ func NewGenerateCommand() terminal.Command {
 	router.Register(&WindsurfRulesCommand{})
 	router.Register(&GeminiMDCommand{})
 	router.Register(&EditorconfigCommand{})
+	// scaffold must be registered last so it can reference all other generators
+	// via the scaffoldGenerators map (which captures the Generate* functions).
+	router.Register(&ScaffoldCommand{})
 	return router
 }
