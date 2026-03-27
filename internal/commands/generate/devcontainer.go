@@ -84,11 +84,6 @@ func GenerateDevcontainer(ctx context.Context, w io.Writer, opts DevcontainerOpt
 		dockerfileBaseImage = devcontainerDockerfileBase
 	}
 
-	// Ensure output directory exists.
-	if err := fs.EnsureDir(opts.OutputDir, 0755); err != nil {
-		return fmt.Errorf("ensure output directory %s: %w", opts.OutputDir, err)
-	}
-
 	// Build template data.
 	data := map[string]interface{}{
 		"Name":              opts.Name,
@@ -124,6 +119,11 @@ func GenerateDevcontainer(ctx context.Context, w io.Writer, opts DevcontainerOpt
 			fmt.Fprintln(w, dockerfileContent)
 		}
 		return nil
+	}
+
+	// Ensure output directory exists (skipped in dry-run — no files will be written).
+	if err := fs.EnsureDir(opts.OutputDir, 0755); err != nil {
+		return fmt.Errorf("ensure output directory %s: %w", opts.OutputDir, err)
 	}
 
 	// Overwrite protection for devcontainer.json.
@@ -284,8 +284,9 @@ func (c *DevcontainerCommand) Run(ctx context.Context, tc *terminal.Context) err
 }
 
 // gatherInput collects values via interactive prompts or validates non-interactive flags.
+// When stdin is not a TTY (e.g. CI), defaults are used without prompting.
 func (c *DevcontainerCommand) gatherInput(tc *terminal.Context, opts *DevcontainerOpts) error {
-	if c.nonInteractive {
+	if c.nonInteractive || !prompt.IsInteractive(os.Stdin) {
 		return c.validateFlags(opts)
 	}
 	return c.promptUser(tc, opts)
