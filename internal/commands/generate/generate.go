@@ -15,5 +15,6 @@ func NewGenerateCommand() terminal.Command {
 	router.Register(&CursorRulesCommand{})
 	router.Register(&WindsurfRulesCommand{})
 	router.Register(&GeminiMDCommand{})
+	router.Register(&GitignoreCommand{})
 	return router
 }
