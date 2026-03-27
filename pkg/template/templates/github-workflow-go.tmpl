@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '{{.GoVersion}}'
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test -race ./...
+{{- if .IncludeLint}}
+
+      - name: Vet
+        run: go vet ./...
+{{- end}}
+{{- if .IncludeCoverage}}
+
+      - name: Test with coverage
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.out
+{{- end}}
