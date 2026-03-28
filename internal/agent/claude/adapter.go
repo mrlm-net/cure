@@ -85,14 +85,19 @@ func (a *claudeAdapter) Provider() string { return "claude" }
 // buildParams constructs SDK message params from a session.
 // RoleSystem messages are moved to the System field; they must not appear
 // in the messages array (the Anthropic API rejects system role in messages).
+//
+// NOTE: In v0.10.x PR C (#123), this method will be updated to handle
+// ToolUseBlock and ToolResultBlock natively. For now it extracts plain text
+// from MessageContent so the project compiles after the Message.Content type
+// change from string to MessageContent.
 func (a *claudeAdapter) buildParams(sess *agent.Session) anthropic.MessageNewParams {
 	msgs := make([]anthropic.MessageParam, 0, len(sess.History))
 	for _, m := range sess.History {
 		switch m.Role {
 		case agent.RoleUser:
-			msgs = append(msgs, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Content)))
+			msgs = append(msgs, anthropic.NewUserMessage(anthropic.NewTextBlock(agent.TextOf(m.Content))))
 		case agent.RoleAssistant:
-			msgs = append(msgs, anthropic.NewAssistantMessage(anthropic.NewTextBlock(m.Content)))
+			msgs = append(msgs, anthropic.NewAssistantMessage(anthropic.NewTextBlock(agent.TextOf(m.Content))))
 		// RoleSystem is handled via sess.SystemPrompt below; skip from history
 		}
 	}

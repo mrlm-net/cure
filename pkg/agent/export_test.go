@@ -7,3 +7,10 @@ func resetRegistry() {
 	defer registryMu.Unlock()
 	registry = make(map[string]AgentFactory)
 }
+
+// ResetSkillRegistry clears the global skill registry. Only available during testing.
+func ResetSkillRegistry() {
+	skillMu.Lock()
+	defer skillMu.Unlock()
+	skillRegistry = make(map[string]Skill)
+}

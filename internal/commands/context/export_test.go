@@ -19,12 +19,12 @@ func TestExportCommand(t *testing.T) {
 	fixedTime, _ := time.Parse("2006-01-02 15:04:05", "2024-01-15 10:30:00")
 
 	sessionWithHistory := &agent.Session{
-		ID:        "abc123def456",
-		Provider:  "claude",
-		Model:     "claude-opus-4-6",
+		ID:       "abc123def456",
+		Provider: "claude",
+		Model:    "claude-opus-4-6",
 		History: []agent.Message{
-			{Role: agent.RoleUser, Content: "Hello, world!"},
-			{Role: agent.RoleAssistant, Content: "Hi there! How can I help you today?"},
+			{Role: agent.RoleUser, Content: agent.MessageContent{agent.TextBlock{Text: "Hello, world!"}}},
+			{Role: agent.RoleAssistant, Content: agent.MessageContent{agent.TextBlock{Text: "Hi there! How can I help you today?"}}},
 		},
 		CreatedAt: fixedTime,
 		UpdatedAt: fixedTime,
@@ -40,10 +40,12 @@ func TestExportCommand(t *testing.T) {
 	}
 
 	sessionWithFork := &agent.Session{
-		ID:        "forkedsession1",
-		Provider:  "claude",
-		Model:     "claude-opus-4-6",
-		History:   []agent.Message{{Role: agent.RoleUser, Content: "forked message"}},
+		ID:       "forkedsession1",
+		Provider: "claude",
+		Model:    "claude-opus-4-6",
+		History: []agent.Message{
+			{Role: agent.RoleUser, Content: agent.MessageContent{agent.TextBlock{Text: "forked message"}}},
+		},
 		CreatedAt: fixedTime,
 		UpdatedAt: fixedTime,
 		ForkOf:    "originalsession",
@@ -203,10 +205,12 @@ func TestExportCommand(t *testing.T) {
 func TestExportCommandOutputFile(t *testing.T) {
 	fixedTime, _ := time.Parse("2006-01-02 15:04:05", "2024-06-01 08:00:00")
 	sess := &agent.Session{
-		ID:        "outputtest1234",
-		Provider:  "claude",
-		Model:     "claude-opus-4-6",
-		History:   []agent.Message{{Role: agent.RoleUser, Content: "write to file"}},
+		ID:       "outputtest1234",
+		Provider: "claude",
+		Model:    "claude-opus-4-6",
+		History: []agent.Message{
+			{Role: agent.RoleUser, Content: agent.MessageContent{agent.TextBlock{Text: "write to file"}}},
+		},
 		CreatedAt: fixedTime,
 		UpdatedAt: fixedTime,
 	}
@@ -344,10 +348,10 @@ func TestRenderMarkdown(t *testing.T) {
 
 	t.Run("role names are title-cased", func(t *testing.T) {
 		s := &agent.Session{
-			ID:    "roletest",
+			ID: "roletest",
 			History: []agent.Message{
-				{Role: agent.RoleUser, Content: "hi"},
-				{Role: agent.RoleAssistant, Content: "hello"},
+				{Role: agent.RoleUser, Content: agent.MessageContent{agent.TextBlock{Text: "hi"}}},
+				{Role: agent.RoleAssistant, Content: agent.MessageContent{agent.TextBlock{Text: "hello"}}},
 			},
 			CreatedAt: fixedTime,
 			UpdatedAt: fixedTime,
@@ -369,10 +373,12 @@ func TestRenderMarkdown(t *testing.T) {
 func TestRenderNDJSON(t *testing.T) {
 	fixedTime, _ := time.Parse("2006-01-02 15:04:05", "2025-01-10 09:00:00")
 	s := &agent.Session{
-		ID:        "ndjsontest",
-		Provider:  "claude",
-		Model:     "claude-opus-4-6",
-		History:   []agent.Message{{Role: agent.RoleUser, Content: "ndjson test"}},
+		ID:       "ndjsontest",
+		Provider: "claude",
+		Model:    "claude-opus-4-6",
+		History: []agent.Message{
+			{Role: agent.RoleUser, Content: agent.MessageContent{agent.TextBlock{Text: "ndjson test"}}},
+		},
 		CreatedAt: fixedTime,
 		UpdatedAt: fixedTime,
 	}
