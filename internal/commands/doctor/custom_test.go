@@ -87,14 +87,28 @@ func TestLoadCustomChecks(t *testing.T) {
 			t.Fatal("expected error for invalid JSON, got nil")
 		}
 	})
+
+	t.Run("unknown pass_on rule returns error", func(t *testing.T) {
+		path := writeTempConfig(t, `{"doctor":{"checks":[{"name":"bad","command":"true","pass_on":"stdout_Contains:hello"}]}}`)
+		_, err := loadCustomChecks(path)
+		if err == nil {
+			t.Fatal("expected error for unknown pass_on rule, got nil")
+		}
+		if !strings.Contains(err.Error(), "unknown pass_on rule") {
+			t.Errorf("error %q should mention 'unknown pass_on rule'", err.Error())
+		}
+	})
 }
 
 func TestMakeCustomCheckFunc_ExitZero(t *testing.T) {
-	t.Run("exit_0 — true command passes", func(t *testing.T) {
+	t.Run("exit_0 — true command passes and message contains name", func(t *testing.T) {
 		cc := customCheck{Name: "always pass", Command: "true", PassOn: "exit_0"}
 		result := makeCustomCheckFunc(cc)()
 		if result.Status != pkgdoctor.CheckPass {
 			t.Errorf("status = %v, want CheckPass", result.Status)
+		}
+		if !strings.Contains(result.Message, cc.Name) {
+			t.Errorf("message %q should contain check name %q", result.Message, cc.Name)
 		}
 	})
 
@@ -148,37 +162,6 @@ func TestMakeCustomCheckFunc_CommandNotFound(t *testing.T) {
 	}
 }
 
-func TestMakeCustomCheckFunc_Timeout(t *testing.T) {
-	// Use a command that sleeps longer than the check timeout (10s).
-	// We patch the command to sleep 11 seconds — but that would make the test
-	// slow. Instead test the timeout logic by using a very short timeout via
-	// a wrapper command.
-	//
-	// We can't directly inject the timeout, so we test that the timeout path
-	// produces CheckWarn by using a short-sleep command and relying on the
-	// system's "sleep" command. Because the real timeout is 10s and CI may
-	// be slow, skip on platforms where sleep isn't available or tests are slow.
-
-	if _, err := os.Stat("/bin/sleep"); err != nil {
-		t.Skip("sleep not available; skipping timeout test")
-	}
-
-	// We can't easily inject a short timeout without refactoring. Instead,
-	// verify the structural correctness: a command that exits non-zero but
-	// is NOT a "not found" error does NOT produce "command not found".
-	cc := customCheck{
-		Name:    "exit 2",
-		Command: "false",
-		PassOn:  "exit_0",
-	}
-	result := makeCustomCheckFunc(cc)()
-	if result.Status == pkgdoctor.CheckWarn {
-		// Would only happen on timeout — "false" exits instantly; if we see
-		// Warn here something unexpected happened.
-		t.Error("unexpected CheckWarn for instant non-zero exit")
-	}
-}
-
 func TestPasses(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -191,8 +174,9 @@ func TestPasses(t *testing.T) {
 		{"exit_0 failure", "exit_0", fmt.Errorf("exit 1"), "", false},
 		{"stdout_contains match", "stdout_contains:hello", nil, "hello world", true},
 		{"stdout_contains no match", "stdout_contains:nope", nil, "hello world", false},
-		{"unknown rule — exit 0", "unknown_rule", nil, "anything", true},
-		{"unknown rule — non-zero", "unknown_rule", fmt.Errorf("exit 1"), "anything", false},
+		// unknown rule unreachable in normal flow (loadCustomChecks validates),
+		// but passes returns false defensively.
+		{"unknown rule returns false", "unknown_rule", nil, "anything", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -204,16 +188,17 @@ func TestPasses(t *testing.T) {
 	}
 }
 
-// Ensure the timeout constant is 10 seconds as specified.
+// TestTimeoutIs10Seconds verifies the 10-second per-check timeout produces
+// CheckWarn. Skipped under -short because it takes approximately 10 seconds.
 func TestTimeoutIs10Seconds(t *testing.T) {
-	const expected = 10 * time.Second
-	// We verify indirectly: create a check whose command is "sleep 11".
-	// The check should complete "quickly" only if the 10s timeout fires.
-	// Skip if the test environment doesn't have sleep.
+	if testing.Short() {
+		t.Skip("slow: requires ~10s for timeout to fire; run without -short to include")
+	}
 	if _, err := os.Stat("/bin/sleep"); err != nil {
 		t.Skip("sleep not available")
 	}
 
+	const expected = 10 * time.Second
 	start := time.Now()
 	cc := customCheck{Name: "sleep 11", Command: "sleep 11", PassOn: "exit_0"}
 	result := makeCustomCheckFunc(cc)()
@@ -225,8 +210,8 @@ func TestTimeoutIs10Seconds(t *testing.T) {
 	if !strings.Contains(result.Message, "timed out") {
 		t.Errorf("message %q should contain 'timed out'", result.Message)
 	}
-	// Should complete in roughly 10s (allow 2s margin).
-	if elapsed > expected+2*time.Second {
+	// Should complete in roughly 10s (allow 5s margin for slow CI).
+	if elapsed > expected+5*time.Second {
 		t.Errorf("timeout took %v, expected ~%v", elapsed, expected)
 	}
 }

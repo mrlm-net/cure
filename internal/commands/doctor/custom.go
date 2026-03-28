@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,10 +14,16 @@ import (
 )
 
 // customCheck holds the parsed JSON definition of a single custom check.
+// The command field is split with strings.Fields and invoked directly
+// (no sh -c). Quoted arguments are NOT supported; arguments containing
+// spaces cannot be passed through this interface.
 type customCheck struct {
 	Name    string `json:"name"`
 	Command string `json:"command"`
-	PassOn  string `json:"pass_on"`
+	// PassOn specifies the success condition: "exit_0" (command exits with
+	// code 0) or "stdout_contains:<pattern>" (stdout contains the literal
+	// pattern). Any other value is rejected at load time.
+	PassOn string `json:"pass_on"`
 }
 
 // customConfig is the subset of .cure.json read by this package.
@@ -27,9 +34,9 @@ type customConfig struct {
 }
 
 // loadCustomChecks reads cfgPath (typically ".cure.json") and returns one
-// CheckFunc per entry in the doctor.checks array. Unknown or empty cfgPath
-// fields produce no checks without error. A missing or unreadable file is
-// treated as "no custom checks" (not an error).
+// CheckFunc per entry in the doctor.checks array. Entries with empty name
+// or command are skipped silently. A missing file returns nil, nil (opt-in,
+// not required). An unreadable or unparseable file returns an error.
 func loadCustomChecks(cfgPath string) ([]pkgdoctor.CheckFunc, error) {
 	data, err := os.ReadFile(cfgPath)
 	if os.IsNotExist(err) {
@@ -46,9 +53,12 @@ func loadCustomChecks(cfgPath string) ([]pkgdoctor.CheckFunc, error) {
 
 	checks := make([]pkgdoctor.CheckFunc, 0, len(cfg.Doctor.Checks))
 	for _, cc := range cfg.Doctor.Checks {
-		cc := cc // capture for closure
 		if cc.Name == "" || cc.Command == "" {
 			continue
+		}
+		// Validate pass_on at load time to surface typos immediately.
+		if cc.PassOn != "exit_0" && !strings.HasPrefix(cc.PassOn, "stdout_contains:") {
+			return nil, fmt.Errorf("custom checks: entry %q has unknown pass_on rule %q; valid: \"exit_0\", \"stdout_contains:<pattern>\"", cc.Name, cc.PassOn)
 		}
 		checks = append(checks, makeCustomCheckFunc(cc))
 	}
@@ -57,8 +67,9 @@ func loadCustomChecks(cfgPath string) ([]pkgdoctor.CheckFunc, error) {
 
 // makeCustomCheckFunc builds a CheckFunc from a customCheck definition.
 // The command is split with strings.Fields and invoked directly (not via
-// sh -c) to eliminate shell injection risk. A 10-second context timeout
-// is applied per check.
+// sh -c) to eliminate shell injection risk. A 10-second timeout is applied
+// per check; the context is rooted at context.Background() so it cannot be
+// cancelled by an external caller — only the built-in timeout fires.
 func makeCustomCheckFunc(cc customCheck) pkgdoctor.CheckFunc {
 	return func() pkgdoctor.CheckResult {
 		argv := strings.Fields(cc.Command)
@@ -66,7 +77,7 @@ func makeCustomCheckFunc(cc customCheck) pkgdoctor.CheckFunc {
 			return pkgdoctor.CheckResult{
 				Name:    cc.Name,
 				Status:  pkgdoctor.CheckFail,
-				Message: "empty command",
+				Message: cc.Name + ": empty command",
 			}
 		}
 
@@ -77,11 +88,11 @@ func makeCustomCheckFunc(cc customCheck) pkgdoctor.CheckFunc {
 		cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 		out, err := cmd.Output()
 
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return pkgdoctor.CheckResult{
 				Name:    cc.Name,
 				Status:  pkgdoctor.CheckWarn,
-				Message: "check timed out",
+				Message: cc.Name + ": check timed out",
 			}
 		}
 
@@ -91,7 +102,7 @@ func makeCustomCheckFunc(cc customCheck) pkgdoctor.CheckFunc {
 				return pkgdoctor.CheckResult{
 					Name:    cc.Name,
 					Status:  pkgdoctor.CheckFail,
-					Message: "command not found",
+					Message: cc.Name + ": command not found",
 				}
 			}
 			// Non-zero exit: evaluate pass_on before deciding status.
@@ -99,15 +110,18 @@ func makeCustomCheckFunc(cc customCheck) pkgdoctor.CheckFunc {
 
 		if passes(cc.PassOn, err, string(out)) {
 			return pkgdoctor.CheckResult{
-				Name:    cc.Name,
-				Status:  pkgdoctor.CheckPass,
-				Message: "",
+				Name:   cc.Name,
+				Status: pkgdoctor.CheckPass,
+				// Message carries the name so the output line is readable.
+				// pkg/doctor.Run renders only r.Message; embedding the name
+				// here ensures custom checks appear identically to built-ins.
+				Message: cc.Name,
 			}
 		}
 
-		msg := "non-zero exit"
+		msg := cc.Name + ": non-zero exit"
 		if err != nil {
-			msg = err.Error()
+			msg = cc.Name + ": " + err.Error()
 		}
 		return pkgdoctor.CheckResult{
 			Name:    cc.Name,
@@ -118,7 +132,7 @@ func makeCustomCheckFunc(cc customCheck) pkgdoctor.CheckFunc {
 }
 
 // passes reports whether the command outcome satisfies the pass_on rule.
-// Supported rules:
+// Supported rules (validated at load time by loadCustomChecks):
 //   - "exit_0"                    — command must exit with code 0
 //   - "stdout_contains:<pattern>" — stdout must contain the literal pattern
 func passes(passOn string, execErr error, stdout string) bool {
@@ -129,17 +143,15 @@ func passes(passOn string, execErr error, stdout string) bool {
 		pattern := strings.TrimPrefix(passOn, "stdout_contains:")
 		return strings.Contains(stdout, pattern)
 	default:
-		// Unknown rule: fall back to exit_0 semantics.
-		return execErr == nil
+		// Unreachable: loadCustomChecks validates pass_on before creating checks.
+		return false
 	}
 }
 
 // isCommandNotFound reports whether err indicates the binary was not found
-// on $PATH. exec.ErrNotFound is returned by exec.LookPath when the binary
-// does not exist; an *exec.ExitError is NOT returned in that case.
+// on $PATH. Uses errors.As to inspect the *exec.Error wrapper structurally
+// rather than relying on string comparison.
 func isCommandNotFound(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), exec.ErrNotFound.Error())
+	var execErr *exec.Error
+	return errors.As(err, &execErr) && errors.Is(execErr.Err, exec.ErrNotFound)
 }
