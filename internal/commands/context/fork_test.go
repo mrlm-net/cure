@@ -135,9 +135,9 @@ func TestForkIsolation(t *testing.T) {
 	forked, _ := st.Load(context.Background(), forkedID)
 
 	// Mutate forked history — source must be unaffected.
-	forked.History[0].Content = "mutated"
+	forked.History[0].Content = agent.MessageContent{agent.TextBlock{Text: "mutated"}}
 	reloaded, _ := st.Load(context.Background(), src.ID)
-	if reloaded.History[0].Content == "mutated" {
+	if agent.TextOf(reloaded.History[0].Content) == "mutated" {
 		t.Error("fork shares history slice with source")
 	}
 }

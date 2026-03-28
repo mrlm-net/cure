@@ -27,7 +27,10 @@ func makeSession(id, provider string, msgs ...string) *agent.Session {
 		if i%2 == 1 {
 			role = agent.RoleAssistant
 		}
-		s.History = append(s.History, agent.Message{Role: role, Content: content})
+		s.History = append(s.History, agent.Message{
+			Role:    role,
+			Content: agent.MessageContent{agent.TextBlock{Text: content}},
+		})
 	}
 	return s
 }
