@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-27
+
 ### Added
 
 - `pkg/doctor` — public reusable health-check framework extracted from `internal/commands/doctor`; zero imports from `internal/` or `cmd/`
@@ -16,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pkg/doctor`: `Run(checks []CheckFunc, w io.Writer) (passed, warned, failed int)` — executes checks in order, formats results with ANSI styling, recovers panics (panicking checks recorded as `CheckFail`; remaining checks continue to run)
 - `pkg/doctor`: `BuiltinChecks() []CheckFunc` — returns the 7 default health checks in canonical order; new slice per call to prevent mutation by callers
 - `internal/commands/doctor`: refactored to thin adapter over `pkg/doctor`; type aliases (`CheckFunc`, `CheckResult`, `CheckStatus`) and var aliases for built-in checks preserve backward compatibility for internal tests
+- `cure doctor` custom checks — reads `doctor.checks` array from `.cure.json`; each entry: `name` (string), `command` (string), `pass_on` (`"exit_0"` | `"stdout_contains:<pattern>"`)
+- `cure doctor` custom checks: each check runs via `os/exec` directly (no `sh -c`, no shell injection surface); `strings.Fields` splits the command into argv; quoted arguments are not supported
+- `cure doctor` custom checks: 10-second per-check timeout → `CheckWarn`; command not found → `CheckFail`; unknown `pass_on` rule rejected at load time (not silent fallback)
+- `cure doctor` custom checks: missing `.cure.json` silently produces no checks (opt-in, not required); parse errors print a warning and skip custom checks without aborting built-in checks
+- `cure doctor --no-custom` — skips all custom checks from `.cure.json`
 - `cure context search <query> [--format table|ndjson]` — case-insensitive substring search across all saved session message history; reports ID, provider, creation time, match count, and a short excerpt from the first match per session
 - `cure context search`: `firstExcerpt` — rune-based UTF-8–safe excerpt windowing (80 runes, 20 rune leading context); adds leading/trailing ellipses when the window does not cover content boundaries
 - `cure context search --format ndjson` — one JSON object per matching session with fields `id`, `provider`, `created_at`, `match_count`, `excerpt`
