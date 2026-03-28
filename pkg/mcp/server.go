@@ -224,6 +224,18 @@ func (s *Server) RegisterPrompt(p Prompt) *Server {
 	return s
 }
 
+// Tools returns all registered tools in registration order.
+// The returned slice is a copy; modifying it does not affect the Server.
+func (s *Server) Tools() []Tool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]Tool, len(s.toolOrder))
+	for i, name := range s.toolOrder {
+		result[i] = s.tools[name]
+	}
+	return result
+}
+
 // Serve auto-detects the appropriate transport and starts serving MCP requests.
 // If os.Stdin is a pipe (non-interactive), stdio transport is used; otherwise
 // HTTP Streamable transport is used on the configured address.
