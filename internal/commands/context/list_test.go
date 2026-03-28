@@ -18,6 +18,7 @@ func TestListCommand(t *testing.T) {
 		sessions     []*agent.Session
 		format       string
 		provider     string
+		tagFilter    string
 		wantContains []string
 		wantNot      []string
 		wantErr      bool
@@ -79,6 +80,42 @@ func TestListCommand(t *testing.T) {
 			wantErr:     true,
 			errContains: "unknown format",
 		},
+		{
+			name: "tag filter returns only matching sessions",
+			sessions: []*agent.Session{
+				{ID: "aaa", Provider: "claude", Model: "m", Tags: []string{"project:myapp"}, History: []agent.Message{}, UpdatedAt: time.Now()},
+				{ID: "bbb", Provider: "claude", Model: "m", Tags: []string{"project:other"}, History: []agent.Message{}, UpdatedAt: time.Now()},
+			},
+			format:       "text",
+			tagFilter:    "project:myapp",
+			wantContains: []string{"aaa"},
+			wantNot:      []string{"bbb"},
+		},
+		{
+			name: "tag filter with no match prints No sessions matched",
+			sessions: []*agent.Session{
+				{ID: "aaa", Provider: "claude", Model: "m", Tags: []string{"project:other"}, History: []agent.Message{}, UpdatedAt: time.Now()},
+			},
+			format:       "text",
+			tagFilter:    "project:nonexistent",
+			wantContains: []string{"No sessions matched"},
+		},
+		{
+			name: "TAGS column appears when sessions have tags",
+			sessions: []*agent.Session{
+				{ID: "aaa", Provider: "claude", Model: "m", Tags: []string{"project:myapp"}, History: []agent.Message{}, UpdatedAt: time.Now()},
+			},
+			format:       "text",
+			wantContains: []string{"TAGS", "project:myapp"},
+		},
+		{
+			name: "TAGS column absent when no session has tags",
+			sessions: []*agent.Session{
+				{ID: "aaa", Provider: "claude", Model: "m", Tags: nil, History: []agent.Message{}, UpdatedAt: time.Now()},
+			},
+			format:  "text",
+			wantNot: []string{"TAGS"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -88,7 +125,7 @@ func TestListCommand(t *testing.T) {
 				_ = st.Save(context.Background(), s)
 			}
 
-			cmd := &ListCommand{store: st, format: tt.format, provider: tt.provider}
+			cmd := &ListCommand{store: st, format: tt.format, provider: tt.provider, tagFilter: tt.tagFilter}
 			var out bytes.Buffer
 			tc := &terminal.Context{Stdout: &out, Stderr: &bytes.Buffer{}}
 
