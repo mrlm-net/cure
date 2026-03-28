@@ -95,7 +95,14 @@ func (c *DoctorCommand) Flags() *flag.FlagSet {
 func (c *DoctorCommand) Run(_ context.Context, tc *terminal.Context) error {
 	checks := pkgdoctor.BuiltinChecks()
 
-	// TODO(#96): load custom checks from .cure.json when --no-custom is false
+	if !c.noCustom {
+		custom, err := loadCustomChecks(".cure.json")
+		if err != nil {
+			fmt.Fprintf(tc.Stderr, "warning: %v\n", err)
+		} else {
+			checks = append(checks, custom...)
+		}
+	}
 
 	fmt.Fprintln(tc.Stdout, "Running project health checks...")
 	fmt.Fprintln(tc.Stdout)
