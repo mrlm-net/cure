@@ -6,12 +6,15 @@ import (
 	"path/filepath"
 
 	_ "github.com/mrlm-net/cure/internal/agent/claude"
+	// _ "github.com/mrlm-net/cure/internal/agent/gemini"  // pending feat/100
+	// _ "github.com/mrlm-net/cure/internal/agent/openai"  // pending feat/99
 	"github.com/mrlm-net/cure/internal/commands"
 	"github.com/mrlm-net/cure/internal/commands/completion"
 	ctxcmd "github.com/mrlm-net/cure/internal/commands/context"
 	"github.com/mrlm-net/cure/internal/commands/doctor"
 	"github.com/mrlm-net/cure/internal/commands/generate"
 	initcmd "github.com/mrlm-net/cure/internal/commands/init"
+	mcmcmd "github.com/mrlm-net/cure/internal/commands/mcp"
 	"github.com/mrlm-net/cure/internal/commands/trace"
 	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
 	"github.com/mrlm-net/cure/pkg/config"
@@ -51,6 +54,8 @@ func run(args []string) error {
 	router.Register(ctxcmd.NewContextCommand(sessionStore))
 	// Register init BEFORE completion so it is visible to completion introspection.
 	router.Register(initcmd.NewInitCommand())
+	// Register mcp BEFORE completion so it is visible to completion introspection.
+	router.Register(mcmcmd.NewMCPCommand())
 	router.Register(completion.NewCompletionCommand(router))
 	return router.RunArgs(args)
 }
