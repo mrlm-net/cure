@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os/signal"
@@ -90,7 +91,7 @@ func (c *ServeCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := srv.Serve(ctx); err != nil && err != context.Canceled {
+	if err := srv.Serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("mcp server: %w", err)
 	}
 	return nil

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -282,24 +283,5 @@ func TestGenerateScaffoldToolLogic(t *testing.T) {
 
 // formatCount is a small helper used in the doctor test to format tallies.
 func formatCount(n int, label string) string {
-	return strings.Join([]string{itoa(n), label}, " ")
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	digits := make([]byte, 0, 10)
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	for n > 0 {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
-	}
-	if neg {
-		digits = append([]byte{'-'}, digits...)
-	}
-	return string(digits)
+	return strings.Join([]string{strconv.Itoa(n), label}, " ")
 }
