@@ -159,6 +159,8 @@ func (a *geminiAdapter) buildRequest(sess *agent.Session, withGenConfig bool) ge
 	for _, m := range sess.History {
 		switch m.Role {
 		case agent.RoleUser:
+			// NOTE: m.Content will become MessageContent after PR #116-120 merges.
+			// At that point, replace with: agent.TextOf(m.Content). See issue #123.
 			contents = append(contents, geminiContent{
 				Role:  "user",
 				Parts: []geminiPart{{Text: m.Content}},

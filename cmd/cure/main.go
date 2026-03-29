@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	_ "github.com/mrlm-net/cure/internal/agent/claude"
-	// _ "github.com/mrlm-net/cure/internal/agent/gemini"  // pending feat/100
+	_ "github.com/mrlm-net/cure/internal/agent/gemini"
 	_ "github.com/mrlm-net/cure/internal/agent/openai"
 	"github.com/mrlm-net/cure/internal/commands"
 	"github.com/mrlm-net/cure/internal/commands/completion"
