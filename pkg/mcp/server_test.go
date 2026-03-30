@@ -205,6 +205,38 @@ func TestRegisterPrompt_PanicsOnDuplicate(t *testing.T) {
 	srv.RegisterPrompt(&noopPrompt{name: "dup"})
 }
 
+func TestServerTools(t *testing.T) {
+	srv := New()
+	// Register 3 tools in order A, B, C
+	a := FuncTool("a", "tool a", Schema().Build(), func(ctx context.Context, args map[string]any) ([]Content, error) { return Text("a"), nil })
+	b := FuncTool("b", "tool b", Schema().Build(), func(ctx context.Context, args map[string]any) ([]Content, error) { return Text("b"), nil })
+	c := FuncTool("c", "tool c", Schema().Build(), func(ctx context.Context, args map[string]any) ([]Content, error) { return Text("c"), nil })
+	srv.RegisterTool(a)
+	srv.RegisterTool(b)
+	srv.RegisterTool(c)
+
+	tools := srv.Tools()
+	if len(tools) != 3 {
+		t.Fatalf("want 3 tools, got %d", len(tools))
+	}
+	if tools[0].Name() != "a" || tools[1].Name() != "b" || tools[2].Name() != "c" {
+		t.Errorf("wrong order: %v", []string{tools[0].Name(), tools[1].Name(), tools[2].Name()})
+	}
+	// Verify returned slice is a copy
+	tools[0] = nil
+	if srv.Tools()[0] == nil {
+		t.Error("modifying returned slice should not affect server internal state")
+	}
+}
+
+func TestServerTools_Empty(t *testing.T) {
+	srv := New()
+	tools := srv.Tools()
+	if len(tools) != 0 {
+		t.Errorf("want 0 tools on empty server, got %d", len(tools))
+	}
+}
+
 func TestRegistration_OrderPreserved(t *testing.T) {
 	srv := New()
 	names := []string{"z-tool", "a-tool", "m-tool"}
