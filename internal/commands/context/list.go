@@ -18,8 +18,9 @@ type ListCommand struct {
 	store agent.SessionStore
 
 	// Flags
-	format   string
-	provider string
+	format    string
+	provider  string
+	tagFilter string
 }
 
 func (c *ListCommand) Name() string        { return "list" }
@@ -34,10 +35,12 @@ session ID, provider, model, message count, and relative last-updated time.
 Flags:
   --format       Output format: "text" (default) or "ndjson"
   --provider     Filter sessions by provider name
+  --tag          Filter sessions by tag (exact match, case-sensitive)
 
 Examples:
   cure context list
   cure context list --provider claude
+  cure context list --tag project:myapp
   cure context list --format ndjson
 `
 }
@@ -46,6 +49,7 @@ func (c *ListCommand) Flags() *flag.FlagSet {
 	fs := flag.NewFlagSet("context-list", flag.ContinueOnError)
 	fs.StringVar(&c.format, "format", "text", `Output format: "text" or "ndjson"`)
 	fs.StringVar(&c.provider, "provider", "", "Filter by provider name")
+	fs.StringVar(&c.tagFilter, "tag", "", "Filter sessions by tag (exact match, case-sensitive)")
 	return fs
 }
 
@@ -66,6 +70,24 @@ func (c *ListCommand) Run(ctx context.Context, tc *terminal.Context) error {
 		sessions = filtered
 	}
 
+	// Apply optional tag filter (exact match, case-sensitive).
+	if c.tagFilter != "" {
+		var filtered []*agent.Session
+		for _, s := range sessions {
+			for _, t := range s.Tags {
+				if t == c.tagFilter {
+					filtered = append(filtered, s)
+					break
+				}
+			}
+		}
+		sessions = filtered
+	}
+	if c.tagFilter != "" && len(sessions) == 0 {
+		fmt.Fprintln(tc.Stdout, "No sessions matched.")
+		return nil
+	}
+
 	switch c.format {
 	case "ndjson":
 		return listNDJSON(tc, sessions)
@@ -77,16 +99,31 @@ func (c *ListCommand) Run(ctx context.Context, tc *terminal.Context) error {
 }
 
 // listText writes a fixed-width text table to tc.Stdout.
+// If any session has non-empty tags, an additional TAGS column is appended.
 func listText(tc *terminal.Context, sessions []*agent.Session) error {
 	if len(sessions) == 0 {
 		fmt.Fprintln(tc.Stdout, "No sessions found.")
 		return nil
 	}
 
-	// Header
-	fmt.Fprintf(tc.Stdout, "%-12s  %-10s  %-20s  %8s  %s\n",
-		"ID", "PROVIDER", "MODEL", "MESSAGES", "UPDATED")
-	fmt.Fprintln(tc.Stdout, strings.Repeat("-", 64))
+	// Determine whether to show the TAGS column.
+	showTags := false
+	for _, s := range sessions {
+		if len(s.Tags) > 0 {
+			showTags = true
+			break
+		}
+	}
+
+	if showTags {
+		fmt.Fprintf(tc.Stdout, "%-12s  %-10s  %-20s  %8s  %-20s  %s\n",
+			"ID", "PROVIDER", "MODEL", "MESSAGES", "TAGS", "UPDATED")
+		fmt.Fprintln(tc.Stdout, strings.Repeat("-", 85))
+	} else {
+		fmt.Fprintf(tc.Stdout, "%-12s  %-10s  %-20s  %8s  %s\n",
+			"ID", "PROVIDER", "MODEL", "MESSAGES", "UPDATED")
+		fmt.Fprintln(tc.Stdout, strings.Repeat("-", 64))
+	}
 
 	for _, s := range sessions {
 		msgCount := len(s.History)
@@ -103,8 +140,17 @@ func listText(tc *terminal.Context, sessions []*agent.Session) error {
 		if len(model) > 20 {
 			model = model[:17] + "..."
 		}
-		fmt.Fprintf(tc.Stdout, "%-12s  %-10s  %-20s  %8d  %s\n",
-			shortID, provider, model, msgCount, updated)
+		if showTags {
+			tags := strings.Join(s.Tags, ",")
+			if len(tags) > 20 {
+				tags = tags[:17] + "..."
+			}
+			fmt.Fprintf(tc.Stdout, "%-12s  %-10s  %-20s  %8d  %-20s  %s\n",
+				shortID, provider, model, msgCount, tags, updated)
+		} else {
+			fmt.Fprintf(tc.Stdout, "%-12s  %-10s  %-20s  %8d  %s\n",
+				shortID, provider, model, msgCount, updated)
+		}
 	}
 	return nil
 }

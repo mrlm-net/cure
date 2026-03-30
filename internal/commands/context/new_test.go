@@ -82,6 +82,115 @@ func TestNewCommand_SessionNameSetsTag(t *testing.T) {
 	}
 }
 
+func TestNewCommand_TagsPopulated(t *testing.T) {
+	registerMock(t)
+
+	st := newMockStore()
+	cmd := &NewCommand{
+		store:    st,
+		provider: "mock",
+		tags:     []string{"project:myapp", "sprint:3"},
+		message:  "hello",
+		format:   "text",
+	}
+
+	var out, errBuf bytes.Buffer
+	tc := &terminal.Context{Stdout: &out, Stderr: &errBuf}
+
+	err := cmd.Run(context.Background(), tc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sessions, _ := st.List(context.Background())
+	if len(sessions) == 0 {
+		t.Fatal("expected at least one saved session")
+	}
+	sess := sessions[0]
+
+	wantTags := []string{"project:myapp", "sprint:3"}
+	for _, want := range wantTags {
+		found := false
+		for _, tag := range sess.Tags {
+			if tag == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected tag %q in %v", want, sess.Tags)
+		}
+	}
+}
+
+func TestNewCommand_TagAndSessionNameCoexist(t *testing.T) {
+	registerMock(t)
+
+	st := newMockStore()
+	cmd := &NewCommand{
+		store:       st,
+		provider:    "mock",
+		sessionName: "my-session",
+		tags:        []string{"project:myapp"},
+		message:     "hello",
+		format:      "text",
+	}
+
+	var out, errBuf bytes.Buffer
+	tc := &terminal.Context{Stdout: &out, Stderr: &errBuf}
+
+	err := cmd.Run(context.Background(), tc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sessions, _ := st.List(context.Background())
+	if len(sessions) == 0 {
+		t.Fatal("expected at least one saved session")
+	}
+	sess := sessions[0]
+
+	wantTags := []string{"name:my-session", "project:myapp"}
+	for _, want := range wantTags {
+		found := false
+		for _, tag := range sess.Tags {
+			if tag == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected tag %q in %v", want, sess.Tags)
+		}
+	}
+}
+
+func TestStringSliceFlag_EmptyValueReturnsError(t *testing.T) {
+	var f stringSliceFlag
+	err := f.Set("")
+	if err == nil {
+		t.Fatal("expected error for empty tag value, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("error should mention 'cannot be empty', got: %v", err)
+	}
+}
+
+func TestStringSliceFlag_AccumulatesValues(t *testing.T) {
+	var f stringSliceFlag
+	for _, v := range []string{"a", "b", "c"} {
+		if err := f.Set(v); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	if len(f) != 3 {
+		t.Fatalf("expected 3 values, got %d: %v", len(f), f)
+	}
+	if f.String() != "a,b,c" {
+		t.Errorf("String() = %q, want %q", f.String(), "a,b,c")
+	}
+}
+
 func TestNewCommand_SystemPromptSet(t *testing.T) {
 	registerMock(t)
 
