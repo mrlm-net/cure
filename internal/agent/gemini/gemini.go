@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mrlm-net/cure/pkg/agent"
 )
@@ -79,7 +80,15 @@ func NewGeminiAgent(cfg map[string]any) (agent.Agent, error) {
 		model:     model,
 		maxTokens: maxTokens,
 		baseURL:   baseURL,
-		client:    &http.Client{},
+		client: &http.Client{
+			Timeout: 5 * time.Minute,
+			CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+				if len(via) >= 3 {
+					return http.ErrUseLastResponse
+				}
+				return nil
+			},
+		},
 	}, nil
 }
 
@@ -227,7 +236,7 @@ func (a *geminiAdapter) Run(ctx context.Context, sess *agent.Session) iter.Seq2[
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			raw, _ := io.ReadAll(resp.Body)
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 			msg := a.sanitiseString(fmt.Sprintf("gemini: API error %d: %s", resp.StatusCode, strings.TrimSpace(string(raw))))
 			yield(agent.Event{Kind: agent.EventKindError, Err: msg}, fmt.Errorf("%s", msg)) //nolint:goerr113
 			return
@@ -328,7 +337,7 @@ func (a *geminiAdapter) CountTokens(ctx context.Context, sess *agent.Session) (i
 	}
 	defer resp.Body.Close()
 
-	raw, err := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
 		return 0, fmt.Errorf("gemini: countTokens read body: %w", err)
 	}
