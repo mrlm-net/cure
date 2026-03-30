@@ -220,9 +220,9 @@ func buildMessages(sess *agent.Session) []chatMessage {
 	}
 	for _, m := range sess.History {
 		role := mapRole(m.Role)
-		// NOTE: m.Content will become MessageContent after PR #116-120 merges.
-		// At that point, replace with: agent.TextOf(m.Content). See issue #123.
-		msgs = append(msgs, chatMessage{Role: role, Content: m.Content})
+		// NOTE: TextOf extracts plain text only. Full multi-block tool dispatch
+		// will be wired in issue #123 (executeToolLoop).
+		msgs = append(msgs, chatMessage{Role: role, Content: agent.TextOf(m.Content)})
 	}
 	return msgs
 }
