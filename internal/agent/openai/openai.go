@@ -9,10 +9,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"iter"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mrlm-net/cure/internal/agent/sseutil"
 	"github.com/mrlm-net/cure/pkg/agent"
@@ -78,7 +80,15 @@ func NewOpenAIAgent(cfg map[string]any) (agent.Agent, error) {
 		baseURL:   baseURL,
 		model:     model,
 		maxTokens: maxTokens,
-		httpClient: &http.Client{},
+		httpClient: &http.Client{
+			Timeout: 5 * time.Minute,
+			CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+				if len(via) >= 3 {
+					return http.ErrUseLastResponse
+				}
+				return nil
+			},
+		},
 	}, nil
 }
 
@@ -161,7 +171,7 @@ func (a *openaiAdapter) stream(ctx context.Context, sess *agent.Session, yield f
 
 	if resp.StatusCode != http.StatusOK {
 		var errBody bytes.Buffer
-		_, _ = errBody.ReadFrom(resp.Body)
+		_, _ = io.Copy(&errBody, io.LimitReader(resp.Body, 64*1024))
 		return sanitiseError(fmt.Errorf("openai: unexpected status %d: %s", resp.StatusCode, errBody.String()), a.apiKey)
 	}
 
