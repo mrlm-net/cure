@@ -20,6 +20,14 @@ func (f *stringSliceFlag) Set(v string) error {
 	if v == "" {
 		return fmt.Errorf("tag value cannot be empty")
 	}
+	if len(v) > 128 {
+		return fmt.Errorf("tag value too long (max 128 characters)")
+	}
+	for _, r := range v {
+		if r < 0x20 {
+			return fmt.Errorf("tag value must not contain control characters")
+		}
+	}
 	*f = append(*f, v)
 	return nil
 }
