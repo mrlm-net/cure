@@ -410,6 +410,7 @@ func TestRun_E2E_ContextCancellation(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sess := agent.NewSession("openai", "gpt-4o")
 	sess.AppendUserMessage("stream test")
 
