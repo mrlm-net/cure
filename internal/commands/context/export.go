@@ -33,7 +33,7 @@ const exportMarkdownTmpl = `# {{ .ID }}
 {{ if .History }}{{ range .History }}
 ## {{ titleCase .Role }}
 
-{{ .Content }}
+{{ contentText .Content }}
 {{ end }}{{ else }}
 _No messages in this session._
 {{ end }}`
@@ -147,6 +147,11 @@ func renderMarkdown(s *agent.Session) ([]byte, error) {
 				return s
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
+		},
+		// contentText extracts plain text from a MessageContent for Markdown rendering.
+		// In v0.10.x PR C (#123), this will be updated to render tool blocks inline.
+		"contentText": func(mc agent.MessageContent) string {
+			return agent.TextOf(mc)
 		},
 	}
 	tmpl, err := template.New("export").Funcs(funcMap).Parse(exportMarkdownTmpl)

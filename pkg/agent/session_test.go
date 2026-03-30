@@ -124,8 +124,8 @@ func TestSessionAppend(t *testing.T) {
 		if s.History[0].Role != agent.RoleUser {
 			t.Errorf("Role = %q, want %q", s.History[0].Role, agent.RoleUser)
 		}
-		if s.History[0].Content != "hello" {
-			t.Errorf("Content = %q, want %q", s.History[0].Content, "hello")
+		if got := agent.TextOf(s.History[0].Content); got != "hello" {
+			t.Errorf("Content text = %q, want %q", got, "hello")
 		}
 		// UpdatedAt must be set to at least the pre-call time.
 		// We use !Before rather than After to avoid flakiness when both
@@ -139,6 +139,61 @@ func TestSessionAppend(t *testing.T) {
 		s.AppendAssistantMessage("hi there")
 		if s.History[0].Role != agent.RoleAssistant {
 			t.Errorf("Role = %q, want %q", s.History[0].Role, agent.RoleAssistant)
+		}
+	})
+	t.Run("AppendAssistantBlocks stores blocks in history", func(t *testing.T) {
+		s := agent.NewSession("p", "m")
+		blocks := []agent.ContentBlock{
+			agent.TextBlock{Text: "part one"},
+			agent.ToolUseBlock{ID: "tu_1", Name: "search", Input: map[string]any{"q": "go"}},
+		}
+		s.AppendAssistantBlocks(blocks)
+		if len(s.History) != 1 {
+			t.Fatalf("History len = %d, want 1", len(s.History))
+		}
+		if s.History[0].Role != agent.RoleAssistant {
+			t.Errorf("Role = %q, want %q", s.History[0].Role, agent.RoleAssistant)
+		}
+		if len(s.History[0].Content) != 2 {
+			t.Errorf("Content blocks = %d, want 2", len(s.History[0].Content))
+		}
+	})
+	t.Run("AppendToolResult stores ToolResultBlock", func(t *testing.T) {
+		s := agent.NewSession("p", "m")
+		s.AppendToolResult("tu_1", "search", "found it", false)
+		if len(s.History) != 1 {
+			t.Fatalf("History len = %d, want 1", len(s.History))
+		}
+		if s.History[0].Role != agent.RoleUser {
+			t.Errorf("Role = %q, want %q", s.History[0].Role, agent.RoleUser)
+		}
+		trb, ok := s.History[0].Content[0].(agent.ToolResultBlock)
+		if !ok {
+			t.Fatalf("Content[0] is %T, want ToolResultBlock", s.History[0].Content[0])
+		}
+		if trb.ID != "tu_1" || trb.ToolName != "search" || trb.Result != "found it" {
+			t.Errorf("ToolResultBlock = {%q, %q, %q}", trb.ID, trb.ToolName, trb.Result)
+		}
+		if trb.IsError {
+			t.Error("IsError should be false")
+		}
+	})
+}
+
+func TestSessionFork_WithTools(t *testing.T) {
+	t.Run("fork with nil tools has nil tools", func(t *testing.T) {
+		orig := agent.NewSession("p", "m")
+		fork := orig.Fork()
+		if fork.Tools != nil {
+			t.Errorf("Tools = %v, want nil", fork.Tools)
+		}
+	})
+	t.Run("fork copies SkillName", func(t *testing.T) {
+		orig := agent.NewSession("p", "m")
+		orig.SkillName = "my-skill"
+		fork := orig.Fork()
+		if fork.SkillName != "my-skill" {
+			t.Errorf("SkillName = %q, want %q", fork.SkillName, "my-skill")
 		}
 	})
 }

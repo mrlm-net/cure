@@ -89,11 +89,12 @@ func searchSessions(sessions []*agent.Session, query string) []searchMatch {
 		var count int
 		var excerpt string
 		for _, msg := range s.History {
-			lower := strings.ToLower(msg.Content)
+			text := agent.TextOf(msg.Content)
+			lower := strings.ToLower(text)
 			if strings.Contains(lower, queryLower) {
 				count++
 				if excerpt == "" {
-					excerpt = firstExcerpt(msg.Content, query, 80)
+					excerpt = firstExcerpt(text, query, 80)
 				}
 			}
 		}
