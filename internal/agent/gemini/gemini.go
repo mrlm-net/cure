@@ -168,16 +168,16 @@ func (a *geminiAdapter) buildRequest(sess *agent.Session, withGenConfig bool) ge
 	for _, m := range sess.History {
 		switch m.Role {
 		case agent.RoleUser:
-			// NOTE: m.Content will become MessageContent after PR #116-120 merges.
-			// At that point, replace with: agent.TextOf(m.Content). See issue #123.
+			// NOTE: TextOf extracts plain text only. Full multi-block tool dispatch
+			// will be wired in issue #123 (executeToolLoop).
 			contents = append(contents, geminiContent{
 				Role:  "user",
-				Parts: []geminiPart{{Text: m.Content}},
+				Parts: []geminiPart{{Text: agent.TextOf(m.Content)}},
 			})
 		case agent.RoleAssistant:
 			contents = append(contents, geminiContent{
 				Role:  "model",
-				Parts: []geminiPart{{Text: m.Content}},
+				Parts: []geminiPart{{Text: agent.TextOf(m.Content)}},
 			})
 		// RoleSystem is handled via sess.SystemPrompt below; skip from history.
 		}
