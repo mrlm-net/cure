@@ -17,8 +17,10 @@ type ResumeCommand struct {
 	store agent.SessionStore
 
 	// Flags
-	message string
-	format  string
+	message   string
+	format    string
+	model     string
+	maxTokens int
 }
 
 func (c *ResumeCommand) Name() string        { return "resume" }
@@ -38,10 +40,13 @@ Arguments:
 Flags:
   --message       User message to send (optional; triggers single-turn mode)
   --format        Output format: "text" (default) or "ndjson"
+  --model         Model name override for this turn (provider-specific; uses provider default if empty)
+  --max-tokens    Maximum tokens override for this turn (uses provider default if 0)
 
 Examples:
   cure context resume abc123def456
   cure context resume abc123def456 --message "Continue where we left off"
+  cure context resume abc123def456 --model "gpt-4o-mini" --message "Quick follow-up"
   echo "What was the last thing we discussed?" | cure context resume abc123def456
 `
 }
@@ -50,6 +55,8 @@ func (c *ResumeCommand) Flags() *flag.FlagSet {
 	fs := flag.NewFlagSet("context-resume", flag.ContinueOnError)
 	fs.StringVar(&c.message, "message", "", "User message to send")
 	fs.StringVar(&c.format, "format", "text", `Output format: "text" or "ndjson"`)
+	fs.StringVar(&c.model, "model", "", "Model name override for this turn (provider-specific; uses provider default if empty)")
+	fs.IntVar(&c.maxTokens, "max-tokens", 0, "Maximum tokens override for this turn (uses provider default if 0)")
 	return fs
 }
 
@@ -67,10 +74,21 @@ func (c *ResumeCommand) Run(ctx context.Context, tc *terminal.Context) error {
 		return fmt.Errorf("context resume: %w", err)
 	}
 
-	a, err := agent.New(sess.Provider, nil)
+	cfg := map[string]any{}
+	if c.model != "" {
+		cfg["model"] = c.model
+	}
+	if c.maxTokens > 0 {
+		cfg["max_tokens"] = c.maxTokens
+	}
+
+	a, err := agent.New(sess.Provider, cfg)
 	if err != nil {
 		return fmt.Errorf("context resume: %w", err)
 	}
+
+	// Do NOT update sess.Model on resume — preserve the stored model.
+	// The agent's internal model setting changes but the session record does not.
 
 	return runTurn(ctx, tc, a, c.store, sess, c.message, c.format)
 }
