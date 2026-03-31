@@ -191,6 +191,113 @@ func TestStringSliceFlag_AccumulatesValues(t *testing.T) {
 	}
 }
 
+func TestNewCommand_SkillNotRegistered_ReturnsError(t *testing.T) {
+	registerMock(t)
+
+	st := newMockStore()
+	cmd := &NewCommand{
+		store:     st,
+		provider:  "mock",
+		skillName: "skill-that-does-not-exist-xyz",
+		message:   "hello",
+		format:    "text",
+	}
+
+	var out, errBuf bytes.Buffer
+	tc := &terminal.Context{Stdout: &out, Stderr: &errBuf}
+
+	err := cmd.Run(context.Background(), tc)
+	if err == nil {
+		t.Fatal("expected error for unknown skill, got nil")
+	}
+	if !strings.Contains(err.Error(), "skill-that-does-not-exist-xyz") {
+		t.Errorf("error should mention skill name, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "not registered") {
+		t.Errorf("error should mention 'not registered', got: %v", err)
+	}
+}
+
+func TestNewCommand_SkillSetsSessionFields(t *testing.T) {
+	registerMock(t)
+
+	agent.RegisterSkill(agent.Skill{
+		Name:         "ctxcmd-test-skill-sets-fields",
+		Description:  "A test skill",
+		SystemPrompt: "You are a test assistant",
+		Tools:        []agent.Tool{},
+	})
+
+	st := newMockStore()
+	cmd := &NewCommand{
+		store:     st,
+		provider:  "mock",
+		skillName: "ctxcmd-test-skill-sets-fields",
+		message:   "hello",
+		format:    "text",
+	}
+
+	var out, errBuf bytes.Buffer
+	tc := &terminal.Context{Stdout: &out, Stderr: &errBuf}
+
+	err := cmd.Run(context.Background(), tc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sessions, _ := st.List(context.Background())
+	if len(sessions) == 0 {
+		t.Fatal("expected at least one saved session")
+	}
+	sess := sessions[0]
+
+	if sess.SkillName != "ctxcmd-test-skill-sets-fields" {
+		t.Errorf("SkillName = %q, want %q", sess.SkillName, "ctxcmd-test-skill-sets-fields")
+	}
+	if sess.SystemPrompt != "You are a test assistant" {
+		t.Errorf("SystemPrompt = %q, want %q", sess.SystemPrompt, "You are a test assistant")
+	}
+}
+
+func TestNewCommand_SkillOverridesSystemPrompt(t *testing.T) {
+	registerMock(t)
+
+	agent.RegisterSkill(agent.Skill{
+		Name:         "ctxcmd-test-skill-override-prompt",
+		Description:  "An override skill",
+		SystemPrompt: "Skill prompt wins",
+		Tools:        nil,
+	})
+
+	st := newMockStore()
+	cmd := &NewCommand{
+		store:        st,
+		provider:     "mock",
+		skillName:    "ctxcmd-test-skill-override-prompt",
+		systemPrompt: "Manual prompt loses",
+		message:      "hello",
+		format:       "text",
+	}
+
+	var out, errBuf bytes.Buffer
+	tc := &terminal.Context{Stdout: &out, Stderr: &errBuf}
+
+	err := cmd.Run(context.Background(), tc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sessions, _ := st.List(context.Background())
+	if len(sessions) == 0 {
+		t.Fatal("expected at least one saved session")
+	}
+	sess := sessions[0]
+
+	if sess.SystemPrompt != "Skill prompt wins" {
+		t.Errorf("SystemPrompt = %q, want skill's prompt %q", sess.SystemPrompt, "Skill prompt wins")
+	}
+}
+
 func TestNewCommand_SystemPromptSet(t *testing.T) {
 	registerMock(t)
 
