@@ -446,6 +446,7 @@ func (a *openaiAdapter) streamInto(
 		args strings.Builder
 	}
 	toolCalls := make(map[int]*toolCallAccum)
+	maxToolIdx := -1 // track highest index seen — indices may be non-contiguous
 
 	parseErr := sseutil.Parse(ctx, resp.Body, func(data []byte) bool {
 		var delta streamDelta
@@ -471,6 +472,9 @@ func (a *openaiAdapter) streamInto(
 				if !exists {
 					acc = &toolCallAccum{}
 					toolCalls[tc.Index] = acc
+				}
+				if tc.Index > maxToolIdx {
+					maxToolIdx = tc.Index
 				}
 				if tc.ID != "" {
 					acc.id = tc.ID
@@ -505,8 +509,9 @@ func (a *openaiAdapter) streamInto(
 		blocks = append(blocks, agent.TextBlock{Text: text})
 	}
 
-	// Reconstruct tool use blocks in index order.
-	for i := 0; i < len(toolCalls); i++ {
+	// Reconstruct tool use blocks in index order. Use maxToolIdx (not
+	// len(toolCalls)) because OpenAI indices may be non-contiguous.
+	for i := 0; i <= maxToolIdx; i++ {
 		acc, ok := toolCalls[i]
 		if !ok {
 			continue
