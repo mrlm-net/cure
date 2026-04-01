@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mrlm-net/cure/pkg/agent"
@@ -256,6 +257,71 @@ func TestBuildMessages(t *testing.T) {
 	})
 }
 
+// ---- TestBuildMessages_ToolHistory ------------------------------------------
+
+func TestBuildMessages_ToolHistory(t *testing.T) {
+	sess := agent.NewSession("openai", "gpt-4o")
+	sess.AppendUserMessage("what is the weather?")
+
+	// Simulate the assistant asking for a tool call.
+	sess.AppendAssistantBlocks([]agent.ContentBlock{
+		agent.ToolUseBlock{
+			ID:    "call_abc",
+			Name:  "get_weather",
+			Input: map[string]any{"location": "Paris"},
+		},
+	})
+
+	// Simulate the tool result being appended.
+	sess.AppendToolResult("call_abc", "get_weather", "72°F and sunny", false)
+
+	msgs := buildMessages(sess)
+
+	// Expected: [user, assistant(tool_calls), tool]
+	if len(msgs) != 3 {
+		t.Fatalf("expected 3 messages, got %d: %+v", len(msgs), msgs)
+	}
+
+	// msgs[0]: user
+	if msgs[0].Role != "user" || msgs[0].Content != "what is the weather?" {
+		t.Errorf("msgs[0] = %+v, want user with weather question", msgs[0])
+	}
+
+	// msgs[1]: assistant with tool_calls
+	if msgs[1].Role != "assistant" {
+		t.Errorf("msgs[1].Role = %q, want %q", msgs[1].Role, "assistant")
+	}
+	if len(msgs[1].ToolCalls) != 1 {
+		t.Fatalf("msgs[1].ToolCalls len = %d, want 1", len(msgs[1].ToolCalls))
+	}
+	tc := msgs[1].ToolCalls[0]
+	if tc.ID != "call_abc" {
+		t.Errorf("tool_call.id = %q, want %q", tc.ID, "call_abc")
+	}
+	if tc.Function.Name != "get_weather" {
+		t.Errorf("tool_call.function.name = %q, want %q", tc.Function.Name, "get_weather")
+	}
+	// Verify the arguments JSON is parseable and contains the location.
+	var args map[string]any
+	if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+		t.Errorf("tool_call.function.arguments is not valid JSON: %v", err)
+	}
+	if loc, _ := args["location"].(string); loc != "Paris" {
+		t.Errorf("tool_call.function.arguments[location] = %q, want %q", loc, "Paris")
+	}
+
+	// msgs[2]: tool result
+	if msgs[2].Role != "tool" {
+		t.Errorf("msgs[2].Role = %q, want %q", msgs[2].Role, "tool")
+	}
+	if msgs[2].ToolCallID != "call_abc" {
+		t.Errorf("msgs[2].ToolCallID = %q, want %q", msgs[2].ToolCallID, "call_abc")
+	}
+	if msgs[2].Content != "72°F and sunny" {
+		t.Errorf("msgs[2].Content = %q, want %q", msgs[2].Content, "72°F and sunny")
+	}
+}
+
 // ---- E2E test with httptest.Server ------------------------------------------
 
 // buildSSEResponse constructs a minimal SSE response with the given token texts.
@@ -277,6 +343,57 @@ func buildSSEResponse(tokens []string) string {
 		sb.Write(data)
 		sb.WriteString("\n")
 	}
+	sb.WriteString("data: [DONE]\n")
+	return sb.String()
+}
+
+// buildSSEToolCallResponse constructs an SSE response representing a tool call request.
+// The arguments are chunked to simulate real streaming fragmentation.
+func buildSSEToolCallResponse(callID, toolName, argsJSON string) string {
+	var sb strings.Builder
+
+	// First delta: tool_call with id, type, and function name (no arguments yet)
+	firstDelta := map[string]any{
+		"choices": []map[string]any{
+			{
+				"delta": map[string]any{
+					"tool_calls": []map[string]any{
+						{
+							"index":    0,
+							"id":       callID,
+							"type":     "function",
+							"function": map[string]any{"name": toolName, "arguments": ""},
+						},
+					},
+				},
+			},
+		},
+	}
+	data, _ := json.Marshal(firstDelta)
+	sb.WriteString("data: ")
+	sb.Write(data)
+	sb.WriteString("\n")
+
+	// Second delta: arguments fragment
+	argsDelta := map[string]any{
+		"choices": []map[string]any{
+			{
+				"delta": map[string]any{
+					"tool_calls": []map[string]any{
+						{
+							"index":    0,
+							"function": map[string]any{"arguments": argsJSON},
+						},
+					},
+				},
+			},
+		},
+	}
+	data, _ = json.Marshal(argsDelta)
+	sb.WriteString("data: ")
+	sb.Write(data)
+	sb.WriteString("\n")
+
 	sb.WriteString("data: [DONE]\n")
 	return sb.String()
 }
@@ -424,4 +541,195 @@ func TestRun_E2E_ContextCancellation(t *testing.T) {
 	}
 	// We just verify the range loop terminates — no panic or hang.
 	_ = count
+}
+
+// ---- Tool loop tests --------------------------------------------------------
+
+// echoTool returns a Tool that echoes its "text" argument as the result.
+func echoTool() agent.Tool {
+	return agent.FuncTool(
+		"echo",
+		"Echoes the input text back",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"text": map[string]any{"type": "string"},
+			},
+			"required": []string{"text"},
+		},
+		func(_ context.Context, args map[string]any) (string, error) {
+			if v, ok := args["text"].(string); ok {
+				return v, nil
+			}
+			return "", nil
+		},
+	)
+}
+
+func TestRun_ToolLoop_SingleCallThenText(t *testing.T) {
+	var callCount int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&callCount, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		switch n {
+		case 1:
+			// First turn: model requests echo("hello")
+			fmt.Fprint(w, buildSSEToolCallResponse("call_echo1", "echo", `{"text":"hello"}`))
+		case 2:
+			// Second turn: model returns plain text after seeing the tool result
+			fmt.Fprint(w, buildSSEResponse([]string{"done"}))
+		default:
+			// Should not be called more than twice
+			http.Error(w, "too many calls", http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	a := NewAdapterForTest("sk-tool-test", srv.URL, "gpt-4o")
+
+	sess := agent.NewSession("openai", "gpt-4o")
+	sess.Tools = []agent.Tool{echoTool()}
+	sess.AppendUserMessage("please echo hello")
+
+	var (
+		gotStart      bool
+		gotDone       bool
+		gotToolCall   *agent.ToolCallEvent
+		gotToolResult *agent.ToolResultEvent
+		tokens        []string
+	)
+
+	for ev, err := range a.Run(context.Background(), sess) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		switch ev.Kind {
+		case agent.EventKindStart:
+			gotStart = true
+		case agent.EventKindDone:
+			gotDone = true
+		case agent.EventKindToolCall:
+			gotToolCall = ev.ToolCall
+		case agent.EventKindToolResult:
+			gotToolResult = ev.ToolResult
+		case agent.EventKindToken:
+			tokens = append(tokens, ev.Text)
+		case agent.EventKindError:
+			t.Fatalf("unexpected error event: %s", ev.Err)
+		}
+	}
+
+	if !gotStart {
+		t.Error("expected EventKindStart")
+	}
+	if !gotDone {
+		t.Error("expected EventKindDone")
+	}
+	if gotToolCall == nil {
+		t.Fatal("expected EventKindToolCall, got none")
+	}
+	if gotToolCall.ToolName != "echo" {
+		t.Errorf("ToolCall.ToolName = %q, want %q", gotToolCall.ToolName, "echo")
+	}
+	if gotToolResult == nil {
+		t.Fatal("expected EventKindToolResult, got none")
+	}
+	if gotToolResult.Result != "hello" {
+		t.Errorf("ToolResult.Result = %q, want %q", gotToolResult.Result, "hello")
+	}
+	if gotToolResult.IsError {
+		t.Error("ToolResult.IsError should be false")
+	}
+	if len(tokens) == 0 || strings.Join(tokens, "") != "done" {
+		t.Errorf("tokens = %v, want [done]", tokens)
+	}
+
+	// Verify server was called exactly twice.
+	if n := atomic.LoadInt32(&callCount); n != 2 {
+		t.Errorf("HTTP handler called %d times, want 2", n)
+	}
+}
+
+func TestRun_ToolLoop_MaxTurnsExceeded(t *testing.T) {
+	var callCount int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&callCount, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		// Always return a tool call — never terminates naturally.
+		fmt.Fprint(w, buildSSEToolCallResponse("call_loop", "echo", `{"text":"loop"}`))
+	}))
+	defer srv.Close()
+
+	a := NewAdapterForTest("sk-loop-test", srv.URL, "gpt-4o")
+
+	sess := agent.NewSession("openai", "gpt-4o")
+	sess.Tools = []agent.Tool{echoTool()}
+	sess.AppendUserMessage("loop forever")
+
+	var gotError bool
+	for ev, err := range a.Run(context.Background(), sess) {
+		if ev.Kind == agent.EventKindError || err != nil {
+			gotError = true
+		}
+	}
+
+	if !gotError {
+		t.Error("expected EventKindError after maxToolTurns exceeded, got none")
+	}
+
+	// Verify server was called exactly maxToolTurns times.
+	if n := atomic.LoadInt32(&callCount); n != maxToolTurns {
+		t.Errorf("HTTP handler called %d times, want %d", n, maxToolTurns)
+	}
+}
+
+func TestRun_ToolLoop_ToolNotFound(t *testing.T) {
+	var callCount int32
+
+	// Multi-turn server: first turn returns a call to an unknown tool;
+	// second turn returns plain text after receiving the "tool not found" result.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&callCount, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		switch n {
+		case 1:
+			fmt.Fprint(w, buildSSEToolCallResponse("call_missing", "nonexistent_tool", `{"x":"y"}`))
+		default:
+			fmt.Fprint(w, buildSSEResponse([]string{"ok"}))
+		}
+	}))
+	defer srv.Close()
+
+	a := NewAdapterForTest("sk-notfound-test", srv.URL, "gpt-4o")
+
+	sess := agent.NewSession("openai", "gpt-4o")
+	// Register an echo tool but NOT nonexistent_tool.
+	sess.Tools = []agent.Tool{echoTool()}
+	sess.AppendUserMessage("call a missing tool")
+
+	var gotToolResult *agent.ToolResultEvent
+	for ev, err := range a.Run(context.Background(), sess) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ev.Kind == agent.EventKindToolResult {
+			gotToolResult = ev.ToolResult
+		}
+	}
+
+	if gotToolResult == nil {
+		t.Fatal("expected EventKindToolResult for missing tool, got none")
+	}
+	if !gotToolResult.IsError {
+		t.Error("ToolResult.IsError should be true for missing tool")
+	}
+	if !strings.Contains(gotToolResult.Result, "nonexistent_tool") {
+		t.Errorf("ToolResult.Result = %q, want it to mention the missing tool name", gotToolResult.Result)
+	}
 }
