@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Tool use (Claude provider)** — Claude adapter now executes multi-turn tool loops, supporting up to 32 sequential tool calls within a single `context new` or `context resume` session.
+- **Skill registry** — `agent.RegisterSkill` / `agent.LookupSkill` allow named presets combining a system prompt and tool set. Activate with `--skill <name>` on `context new` or `context resume`.
+- **MCP bridge** — `ToolsFromMCPServer` in `internal/agent/tools` wraps an MCP server's tools as `agent.Tool` values, enabling MCP-backed tool dispatch in the Claude adapter.
+- **Tool event rendering** — The REPL now renders `[tool]` and `[tool result]` annotations to stderr, keeping stdout clean for tool-augmented sessions.
+- `pkg/agent`: `Tool` interface, `FuncTool` helper, `MessageContent`/`ContentBlock` codec (backward-compatible JSON), `Skill` registry, `EventKindToolCall`/`EventKindToolResult` event types, `Session.Tools` transient field, `Fork`, `AppendAssistantBlocks`, `AppendToolResult`.
+- `pkg/mcp`: `Server.Tools()` accessor returns registered tools in declaration order.
+
 ## [0.8.0] - 2026-03-27
 
 ### Added
