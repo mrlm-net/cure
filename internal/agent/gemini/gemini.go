@@ -356,7 +356,7 @@ func (a *geminiAdapter) executeToolLoop(ctx context.Context, sess *agent.Session
 
 	for turn := 0; turn < maxToolTurns; turn++ {
 		// Stream one model response turn; collect all content blocks.
-		blocks, ok := a.streamInto(ctx, sess, ch)
+		blocks, ok := a.streamInto(ctx, sess, turn, ch)
 		if !ok {
 			// Context cancelled or streaming error — streamInto already sent the
 			// error event; stop the loop.
@@ -378,7 +378,7 @@ func (a *geminiAdapter) executeToolLoop(ctx context.Context, sess *agent.Session
 		sess.AppendAssistantBlocks(blocks)
 
 		// Execute each tool and collect results.
-		for idx, tub := range toolUseBlocks {
+		for _, tub := range toolUseBlocks {
 			// Marshal Input map to JSON string for the event payload.
 			inputBytes, err := json.Marshal(tub.Input)
 			if err != nil {
@@ -440,7 +440,6 @@ func (a *geminiAdapter) executeToolLoop(ctx context.Context, sess *agent.Session
 
 			// Append the tool result to session history so the model sees it on the
 			// next turn. The ID is the locally generated "fc_{turn}_{idx}" value.
-			_ = idx // idx is encoded in tub.ID already
 			sess.AppendToolResult(tub.ID, tub.Name, toolResult, isError)
 		}
 		// Loop back: re-invoke the model with updated history.
@@ -462,6 +461,7 @@ func (a *geminiAdapter) executeToolLoop(ctx context.Context, sess *agent.Session
 func (a *geminiAdapter) streamInto(
 	ctx context.Context,
 	sess *agent.Session,
+	turn int,
 	ch chan<- geminiResult,
 ) ([]agent.ContentBlock, bool) {
 	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?alt=sse&key=%s",
@@ -526,15 +526,7 @@ func (a *geminiAdapter) streamInto(
 		stopReason    string
 		textBuf       strings.Builder
 		funcCallParts []geminiFunctionCall
-		turnIndex     int // turn index, injected from caller via closure is not possible — use 0 here;
-		                  // IDs are unique per turn because executeToolLoop passes `turn` via tub.ID.
 	)
-	// turnIndex is used to generate unique tool call IDs within this stream.
-	// The actual turn number is managed by executeToolLoop; within a single
-	// streamInto call we number function calls as fc_0_0, fc_0_1, ... using
-	// the local index only. Turn-level uniqueness comes from the fact that
-	// each turn calls streamInto independently.
-	_ = turnIndex
 
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
@@ -604,14 +596,15 @@ func (a *geminiAdapter) streamInto(
 		blocks = append(blocks, agent.TextBlock{Text: text})
 	}
 
-	// Convert function call parts to ToolUseBlocks, assigning local IDs.
+	// Convert function call parts to ToolUseBlocks, assigning locally generated
+	// IDs that encode both turn and index for cross-turn uniqueness.
 	for i, fc := range funcCallParts {
 		args := fc.Args
 		if args == nil {
 			args = make(map[string]any)
 		}
 		blocks = append(blocks, agent.ToolUseBlock{
-			ID:    fmt.Sprintf("fc_0_%d", i),
+			ID:    fmt.Sprintf("fc_%d_%d", turn, i),
 			Name:  fc.Name,
 			Input: args,
 		})
