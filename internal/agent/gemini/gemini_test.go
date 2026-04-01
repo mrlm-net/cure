@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	gemini "github.com/mrlm-net/cure/internal/agent/gemini"
@@ -390,5 +391,261 @@ func TestRun_SystemPrompt(t *testing.T) {
 	if reqBody.SystemInstruction.Parts[0].Text != "You are a helpful assistant." {
 		t.Errorf("systemInstruction text = %q, want %q",
 			reqBody.SystemInstruction.Parts[0].Text, "You are a helpful assistant.")
+	}
+}
+
+// ---- Tool loop tests --------------------------------------------------------
+
+// geminiEchoTool returns a FuncTool that echoes its "text" argument.
+func geminiEchoTool() agent.Tool {
+	return agent.FuncTool(
+		"echo",
+		"Echoes the input text back",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"text": map[string]any{"type": "string"},
+			},
+			"required": []string{"text"},
+		},
+		func(_ context.Context, args map[string]any) (string, error) {
+			if v, ok := args["text"].(string); ok {
+				return v, nil
+			}
+			return "", nil
+		},
+	)
+}
+
+// buildFunctionCallStream returns an SSE stream containing a single functionCall part.
+// Unlike OpenAI, Gemini delivers the complete function call in one event.
+func buildFunctionCallStream(toolName string, args map[string]any) string {
+	ev := map[string]any{
+		"candidates": []map[string]any{
+			{
+				"content": map[string]any{
+					"parts": []map[string]any{
+						{"functionCall": map[string]any{"name": toolName, "args": args}},
+					},
+					"role": "model",
+				},
+				"finishReason": "FUNCTION_CALL",
+			},
+		},
+	}
+	b, _ := json.Marshal(ev)
+	return sseData(string(b))
+}
+
+// TestRun_ToolLoop_SingleCallThenText verifies that a single function call
+// followed by a plain-text response completes the tool loop correctly.
+func TestRun_ToolLoop_SingleCallThenText(t *testing.T) {
+	var callCount int32
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&callCount, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		switch n {
+		case 1:
+			fmt.Fprint(w, buildFunctionCallStream("echo", map[string]any{"text": "hello"}))
+		case 2:
+			fmt.Fprint(w, validStreamBody())
+		default:
+			http.Error(w, "too many calls", http.StatusInternalServerError)
+		}
+	}))
+	defer ts.Close()
+
+	a := gemini.NewAdapterForTest("test-key", "gemini-2.5-pro", 8192, ts.URL, nil)
+
+	sess := agent.NewSession("gemini", "gemini-2.5-pro")
+	sess.Tools = []agent.Tool{geminiEchoTool()}
+	sess.AppendUserMessage("please echo hello")
+
+	var (
+		gotStart      bool
+		gotDone       bool
+		gotToolCall   *agent.ToolCallEvent
+		gotToolResult *agent.ToolResultEvent
+		tokens        []string
+	)
+
+	for ev, err := range a.Run(context.Background(), sess) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		switch ev.Kind {
+		case agent.EventKindStart:
+			gotStart = true
+		case agent.EventKindDone:
+			gotDone = true
+		case agent.EventKindToolCall:
+			gotToolCall = ev.ToolCall
+		case agent.EventKindToolResult:
+			gotToolResult = ev.ToolResult
+		case agent.EventKindToken:
+			tokens = append(tokens, ev.Text)
+		case agent.EventKindError:
+			t.Fatalf("unexpected error event: %s", ev.Err)
+		}
+	}
+
+	if !gotStart {
+		t.Error("expected EventKindStart")
+	}
+	if !gotDone {
+		t.Error("expected EventKindDone")
+	}
+	if gotToolCall == nil {
+		t.Fatal("expected EventKindToolCall, got none")
+	}
+	if gotToolCall.ToolName != "echo" {
+		t.Errorf("ToolCall.ToolName = %q, want %q", gotToolCall.ToolName, "echo")
+	}
+	if gotToolResult == nil {
+		t.Fatal("expected EventKindToolResult, got none")
+	}
+	if gotToolResult.Result != "hello" {
+		t.Errorf("ToolResult.Result = %q, want %q", gotToolResult.Result, "hello")
+	}
+	if gotToolResult.IsError {
+		t.Error("ToolResult.IsError should be false")
+	}
+	if len(tokens) == 0 {
+		t.Error("expected at least one token after tool loop")
+	}
+	if n := atomic.LoadInt32(&callCount); n != 2 {
+		t.Errorf("HTTP handler called %d times, want 2", n)
+	}
+}
+
+// TestRun_ToolLoop_MaxTurnsExceeded verifies that an EventKindError is emitted
+// when the model exceeds the tool turn hard cap.
+func TestRun_ToolLoop_MaxTurnsExceeded(t *testing.T) {
+	const localMaxTurns = 32 // must match maxToolTurns in gemini.go
+
+	var callCount int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&callCount, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, buildFunctionCallStream("echo", map[string]any{"text": "loop"}))
+	}))
+	defer ts.Close()
+
+	a := gemini.NewAdapterForTest("test-key", "gemini-2.5-pro", 8192, ts.URL, nil)
+
+	sess := agent.NewSession("gemini", "gemini-2.5-pro")
+	sess.Tools = []agent.Tool{geminiEchoTool()}
+	sess.AppendUserMessage("loop forever")
+
+	var gotError bool
+	for ev, err := range a.Run(context.Background(), sess) {
+		if ev.Kind == agent.EventKindError || err != nil {
+			gotError = true
+		}
+	}
+
+	if !gotError {
+		t.Error("expected EventKindError after maxToolTurns exceeded, got none")
+	}
+	if n := atomic.LoadInt32(&callCount); n != int32(localMaxTurns) {
+		t.Errorf("HTTP handler called %d times, want %d", n, localMaxTurns)
+	}
+}
+
+// TestRun_ToolLoop_ToolNotFound verifies that an unknown tool call results in
+// an IsError=true ToolResultEvent (not a fatal error), and the loop continues.
+func TestRun_ToolLoop_ToolNotFound(t *testing.T) {
+	var callCount int32
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&callCount, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		switch n {
+		case 1:
+			fmt.Fprint(w, buildFunctionCallStream("nonexistent_tool", map[string]any{"x": "y"}))
+		default:
+			fmt.Fprint(w, validStreamBody())
+		}
+	}))
+	defer ts.Close()
+
+	a := gemini.NewAdapterForTest("test-key", "gemini-2.5-pro", 8192, ts.URL, nil)
+
+	sess := agent.NewSession("gemini", "gemini-2.5-pro")
+	sess.Tools = []agent.Tool{geminiEchoTool()}
+	sess.AppendUserMessage("call unknown tool")
+
+	var (
+		gotToolResult *agent.ToolResultEvent
+		gotFatalErr   bool
+	)
+	for ev, err := range a.Run(context.Background(), sess) {
+		if err != nil || ev.Kind == agent.EventKindError {
+			gotFatalErr = true
+		}
+		if ev.Kind == agent.EventKindToolResult {
+			gotToolResult = ev.ToolResult
+		}
+	}
+
+	if gotFatalErr {
+		t.Error("expected no fatal error for unknown tool — should yield IsError=true result instead")
+	}
+	if gotToolResult == nil {
+		t.Fatal("expected EventKindToolResult, got none")
+	}
+	if !gotToolResult.IsError {
+		t.Error("ToolResult.IsError should be true for unknown tool")
+	}
+	if !strings.Contains(gotToolResult.Result, "nonexistent_tool") {
+		t.Errorf("ToolResult.Result = %q, want it to mention the tool name", gotToolResult.Result)
+	}
+}
+
+// TestRun_ToolLoop_ToolsIncludedInRequest verifies that registered tools are
+// serialised into the Gemini request as functionDeclarations.
+func TestRun_ToolLoop_ToolsIncludedInRequest(t *testing.T) {
+	var capturedBody []byte
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, validStreamBody())
+	}))
+	defer ts.Close()
+
+	a := gemini.NewAdapterForTest("test-key", "gemini-2.5-pro", 8192, ts.URL, nil)
+
+	sess := agent.NewSession("gemini", "gemini-2.5-pro")
+	sess.Tools = []agent.Tool{geminiEchoTool()}
+	sess.AppendUserMessage("test tools in request")
+
+	for _, _ = range a.Run(context.Background(), sess) {
+	}
+
+	var reqBody struct {
+		Tools []struct {
+			FunctionDeclarations []struct {
+				Name string `json:"name"`
+			} `json:"functionDeclarations"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(capturedBody, &reqBody); err != nil {
+		t.Fatalf("unmarshal captured body: %v", err)
+	}
+	if len(reqBody.Tools) == 0 {
+		t.Fatal("tools array missing from request body")
+	}
+	if len(reqBody.Tools[0].FunctionDeclarations) == 0 {
+		t.Fatal("functionDeclarations missing from tools[0]")
+	}
+	if reqBody.Tools[0].FunctionDeclarations[0].Name != "echo" {
+		t.Errorf("functionDeclarations[0].name = %q, want %q",
+			reqBody.Tools[0].FunctionDeclarations[0].Name, "echo")
 	}
 }
