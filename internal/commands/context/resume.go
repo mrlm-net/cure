@@ -21,6 +21,7 @@ type ResumeCommand struct {
 	format    string
 	model     string
 	maxTokens int
+	skillName string
 }
 
 func (c *ResumeCommand) Name() string        { return "resume" }
@@ -40,12 +41,14 @@ Arguments:
 Flags:
   --message       User message to send (optional; triggers single-turn mode)
   --format        Output format: "text" (default) or "ndjson"
+  --skill         Named skill to activate (or switch) for this session
   --model         Model name override for this turn (provider-specific; uses provider default if empty)
   --max-tokens    Maximum tokens override for this turn (uses provider default if 0)
 
 Examples:
   cure context resume abc123def456
   cure context resume abc123def456 --message "Continue where we left off"
+  cure context resume abc123def456 --skill go-expert --message "Help me optimize this"
   cure context resume abc123def456 --model "gpt-4o-mini" --message "Quick follow-up"
   echo "What was the last thing we discussed?" | cure context resume abc123def456
 `
@@ -57,6 +60,7 @@ func (c *ResumeCommand) Flags() *flag.FlagSet {
 	fs.StringVar(&c.format, "format", "text", `Output format: "text" or "ndjson"`)
 	fs.StringVar(&c.model, "model", "", "Model name override for this turn (provider-specific; uses provider default if empty)")
 	fs.IntVar(&c.maxTokens, "max-tokens", 0, "Maximum tokens override for this turn (uses provider default if 0)")
+	fs.StringVar(&c.skillName, "skill", "", "Named skill to activate (or switch) for this session")
 	return fs
 }
 
@@ -89,6 +93,20 @@ func (c *ResumeCommand) Run(ctx context.Context, tc *terminal.Context) error {
 
 	// Do NOT update sess.Model on resume — preserve the stored model.
 	// The agent's internal model setting changes but the session record does not.
+
+	// --skill on resume overwrites the system prompt, tools, and skill name,
+	// allowing callers to activate or switch skills on existing sessions.
+	// Note: History is preserved — prior turns may be inconsistent with the
+	// new skill's prompt if the skill is switched mid-session.
+	if c.skillName != "" {
+		skill, ok := agent.LookupSkill(c.skillName)
+		if !ok {
+			return fmt.Errorf("context resume: skill %q not registered", c.skillName)
+		}
+		sess.SystemPrompt = skill.SystemPrompt
+		sess.Tools = skill.Tools
+		sess.SkillName = skill.Name
+	}
 
 	return runTurn(ctx, tc, a, c.store, sess, c.message, c.format)
 }

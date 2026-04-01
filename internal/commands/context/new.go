@@ -47,6 +47,7 @@ type NewCommand struct {
 	tags         []string // set by repeated --tag flags
 	model        string
 	maxTokens    int
+	skillName    string
 }
 
 func (c *NewCommand) Name() string        { return "new" }
@@ -64,6 +65,7 @@ Flags:
   --message         Initial user message (optional; triggers single-turn mode)
   --format          Output format: "text" (default) or "ndjson"
   --system-prompt   System prompt to set for the session
+  --skill           Named skill to activate for this session (overrides --system-prompt)
   --session-name    Human-readable name tag stored with the session
   --tag             Tag for this session (may be repeated)
   --model           Model name (provider-specific; uses provider default if empty)
@@ -73,6 +75,7 @@ Examples:
   cure context new --provider claude
   cure context new --provider claude --message "Hello, world"
   cure context new --provider claude --system-prompt "You are a Go expert" --session-name "go-help"
+  cure context new --provider claude --skill go-expert --session-name "go-help"
   cure context new --provider claude --tag project:myapp --tag sprint:3
   cure context new --provider openai --model "gpt-4o-mini" --max-tokens 2048
   echo "Explain goroutines" | cure context new --provider claude
@@ -84,11 +87,12 @@ func (c *NewCommand) Flags() *flag.FlagSet {
 	fs.StringVar(&c.provider, "provider", "", "AI provider name (required)")
 	fs.StringVar(&c.message, "message", "", "Initial user message")
 	fs.StringVar(&c.format, "format", "text", `Output format: "text" or "ndjson"`)
-	fs.StringVar(&c.systemPrompt, "system-prompt", "", "System prompt for the session")
+	fs.StringVar(&c.systemPrompt, "system-prompt", "", "System prompt for the session (overridden by --skill)")
 	fs.StringVar(&c.sessionName, "session-name", "", "Human-readable name tag for the session")
 	fs.Var((*stringSliceFlag)(&c.tags), "tag", "Tag for this session (may be repeated)")
 	fs.StringVar(&c.model, "model", "", "Model name (provider-specific; uses provider default if empty)")
 	fs.IntVar(&c.maxTokens, "max-tokens", 0, "Maximum tokens for the response (uses provider default if 0)")
+	fs.StringVar(&c.skillName, "skill", "", "Named skill to activate for this session (overrides --system-prompt)")
 	return fs
 }
 
@@ -118,6 +122,16 @@ func (c *NewCommand) Run(ctx context.Context, tc *terminal.Context) error {
 	sess := agent.NewSession(c.provider, model)
 	if c.systemPrompt != "" {
 		sess.SystemPrompt = c.systemPrompt
+	}
+	// --skill overrides --system-prompt when both are provided.
+	if c.skillName != "" {
+		skill, ok := agent.LookupSkill(c.skillName)
+		if !ok {
+			return fmt.Errorf("context new: skill %q not registered", c.skillName)
+		}
+		sess.SystemPrompt = skill.SystemPrompt
+		sess.Tools = skill.Tools
+		sess.SkillName = skill.Name
 	}
 	if c.sessionName != "" {
 		sess.Tags = append(sess.Tags, "name:"+c.sessionName)
