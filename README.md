@@ -14,6 +14,8 @@ The project is under active development — currently at v0.8.0 with a stable AP
 
 - **Project bootstrapping** — `cure init` bootstraps a complete project scaffold in one command: AI assistant files, devcontainer, CI workflow, editorconfig, and gitignore; interactive wizard or fully flag-driven for CI use
 - **AI context management** — Start, resume, list, fork, delete, search, and export multi-turn AI conversations from the terminal; sessions are persisted to `~/.local/share/cure/sessions/` and work with any registered provider
+- **Tool use** — The Claude provider executes multi-turn tool loops (up to 32 turns) within a single `context new` or `context resume` session; register tools via the `pkg/agent` API or activate named presets with `--skill <name>`
+- **Skill registry** — `agent.RegisterSkill` bundles a system prompt with a set of tools under a named preset; `--skill <name>` on `context new` or `context resume` activates the preset for that session
 - **Template generation** — Create `CLAUDE.md` project context files for AI assistants with interactive or flag-driven configuration; `--dry-run` prints output to stdout without writing files
 - **Network tracing** — Trace HTTP requests (DNS resolution, TLS handshake, response timing), TCP connections, and UDP packet exchanges with detailed event streams
 - **Flexible output** — Export data as NDJSON for log aggregation or HTML for visual inspection with syntax-highlighted JSON payloads
@@ -152,15 +154,34 @@ cure init summary:
 ### AI Context Management
 
 - `cure context new --provider <name> --message <text>` — Start a new conversation session; streams the response to stdout and persists the session
+- `cure context new --skill <name>` — Start a session with a named skill preset (system prompt + tool set)
 - `cure context resume <id> --message <text>` — Continue an existing session with a new user message
+- `cure context resume <id> --skill <name>` — Resume a session and activate a skill preset
 - `cure context list [--format text|ndjson]` — List saved sessions sorted newest-first
 - `cure context fork <id>` — Deep-copy a session with a new ID; prints the forked ID to stdout
 - `cure context delete [--yes] <id>` — Delete a session (prompts for confirmation unless `--yes` is supplied)
 - `cure context search <query> [--format table|ndjson]` — Search all session history for messages containing the query (case-insensitive); reports ID, provider, creation time, match count, and an excerpt
 - `cure context export <session-id> [--format markdown|ndjson] [--output <file>]` — Export a session as Markdown (default) or NDJSON; read-only, never mutates the session
-- `cure context` *(no args)* — Enter REPL mode for interactive multi-turn conversation
+- `cure context` *(no args)* — Enter REPL mode for interactive multi-turn conversation; tool calls and results are annotated to stderr
 
 Sessions are stored in `~/.local/share/cure/sessions/` (XDG-compliant). Set `ANTHROPIC_API_KEY` before using the `claude` provider.
+
+#### Using tools and skills
+
+The Claude provider supports multi-turn tool use. Skills are named presets that combine a system prompt with a set of tools and are registered at program startup via `agent.RegisterSkill`. Skills do not imply a provider — `--provider` is still required on `context new`.
+
+```sh
+# Start a session with the "code-review" skill (system prompt + tools pre-loaded)
+# Note: --provider is required; skills are provider-agnostic presets
+cure context new --provider claude --skill code-review --message "Review this diff"
+
+# Resume a session and apply a skill
+cure context resume <id> --skill code-review --message "What about the tests?"
+```
+
+The `code-review` skill above is illustrative — skills must be registered at program startup via `agent.RegisterSkill` in your own program or in a future `skills.json` configuration.
+
+During a tool-augmented session, the REPL annotates tool calls and results to stderr so stdout stays clean for piping. The Claude adapter automatically executes up to 32 sequential tool calls per session turn.
 
 #### Searching session history
 
@@ -546,6 +567,68 @@ session.AppendAssistantMessage(response.String())
 ```
 
 Cancelling the context terminates the stream early.
+
+### Tool use
+
+Attach tools to a session via `Session.Tools` before calling `Agent.Run`. The Claude adapter automatically executes tool calls and re-invokes the model until the model returns without requesting tools (up to 32 turns). Tool call and tool result events are emitted during the loop.
+
+```go
+// Define a tool with FuncTool — no struct needed.
+getTime := agent.FuncTool(
+    "get_time",
+    "Return the current wall-clock time as HH:MM.",
+    map[string]any{"type": "object", "properties": map[string]any{}},
+    func(ctx context.Context, _ map[string]any) (string, error) {
+        return time.Now().Format("15:04"), nil
+    },
+)
+
+session := agent.NewSession("claude", "claude-opus-4-6")
+session.AppendUserMessage("What time is it?")
+session.Tools = []agent.Tool{getTime}
+
+for ev, err := range a.Run(ctx, session) {
+    if err != nil {
+        log.Fatal(err)
+    }
+    switch ev.Kind {
+    case agent.EventKindToolCall:
+        fmt.Fprintf(os.Stderr, "[tool] %s(%s)\n", ev.ToolCall.ToolName, ev.ToolCall.InputJSON)
+    case agent.EventKindToolResult:
+        fmt.Fprintf(os.Stderr, "[tool result] %s → %s\n", ev.ToolResult.ToolName, ev.ToolResult.Result)
+    case agent.EventKindToken:
+        fmt.Print(ev.Text)
+    }
+}
+```
+
+`Session.Tools` is transient — it is excluded from JSON serialization (`json:"-"`) so tool registrations are never written to the session file. Reattach tools when loading a persisted session.
+
+### Skill registry
+
+A `Skill` is a named preset that bundles a system prompt with a set of tools. Register skills at program startup and activate them by name via `--skill <name>` on `context new` or `context resume`, or programmatically:
+
+```go
+// Register a skill at init time (typically in an init() function).
+agent.RegisterSkill(agent.Skill{
+    Name:         "time-assistant",
+    Description:  "Answers questions about the current time.",
+    SystemPrompt: "You are a helpful assistant that can tell the current time.",
+    Tools:        []agent.Tool{getTime},
+})
+
+// Look up a skill and apply it to a session.
+if skill, ok := agent.LookupSkill("time-assistant"); ok {
+    session.SystemPrompt = skill.SystemPrompt
+    session.Tools = skill.Tools
+    session.SkillName = skill.Name
+}
+
+// List all registered skills.
+for _, s := range agent.Skills() {
+    fmt.Printf("  %s — %s\n", s.Name, s.Description)
+}
+```
 
 ### Persisting sessions
 
