@@ -649,3 +649,156 @@ func TestRun_ToolLoop_ToolsIncludedInRequest(t *testing.T) {
 			reqBody.Tools[0].FunctionDeclarations[0].Name, "echo")
 	}
 }
+
+// TestRun_ToolLoop_NoToolsRegistered verifies that when the session has no
+// Tools registered and the mock server returns a functionCall part, the loop
+// does NOT enter tool dispatch — no EventKindToolCall should be emitted and the
+// response is treated as a plain assistant message.
+func TestRun_ToolLoop_NoToolsRegistered(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		// Return a function call response even though no tools are registered.
+		fmt.Fprint(w, buildFunctionCallStream("ghost_tool", map[string]any{"x": "y"}))
+	}))
+	defer ts.Close()
+
+	a := gemini.NewAdapterForTest("test-key", "gemini-2.5-pro", 8192, ts.URL, nil)
+
+	sess := agent.NewSession("gemini", "gemini-2.5-pro")
+	// Intentionally leave sess.Tools empty.
+	sess.AppendUserMessage("do something")
+
+	var (
+		gotToolCall bool
+		gotStart    bool
+		gotDone     bool
+	)
+	for ev, err := range a.Run(context.Background(), sess) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		switch ev.Kind {
+		case agent.EventKindStart:
+			gotStart = true
+		case agent.EventKindDone:
+			gotDone = true
+		case agent.EventKindToolCall:
+			gotToolCall = true
+		case agent.EventKindError:
+			t.Fatalf("unexpected error event: %s", ev.Err)
+		}
+	}
+
+	if gotToolCall {
+		t.Error("EventKindToolCall should NOT be emitted when no tools are registered")
+	}
+	if !gotStart {
+		t.Error("expected EventKindStart")
+	}
+	if !gotDone {
+		t.Error("expected EventKindDone")
+	}
+}
+
+// geminiErrorEchoTool returns a FuncTool whose Call always returns an error.
+func geminiErrorEchoTool() agent.Tool {
+	return agent.FuncTool(
+		"echo",
+		"Echoes the input text back",
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"text": map[string]any{"type": "string"},
+			},
+			"required": []string{"text"},
+		},
+		func(_ context.Context, _ map[string]any) (string, error) {
+			return "", fmt.Errorf("echo: simulated failure")
+		},
+	)
+}
+
+// TestRun_ToolLoop_ToolReturnsError verifies that when a tool's Call returns an
+// error, the loop emits EventKindToolResult with IsError=true and continues
+// the conversation — the model gets the error result and responds with text.
+func TestRun_ToolLoop_ToolReturnsError(t *testing.T) {
+	var callCount int32
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&callCount, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		switch n {
+		case 1:
+			// First turn: model requests echo tool
+			fmt.Fprint(w, buildFunctionCallStream("echo", map[string]any{"text": "boom"}))
+		case 2:
+			// Second turn: model returns plain text after seeing the error result
+			fmt.Fprint(w, validStreamBody())
+		default:
+			http.Error(w, "too many calls", http.StatusInternalServerError)
+		}
+	}))
+	defer ts.Close()
+
+	a := gemini.NewAdapterForTest("test-key", "gemini-2.5-pro", 8192, ts.URL, nil)
+
+	sess := agent.NewSession("gemini", "gemini-2.5-pro")
+	sess.Tools = []agent.Tool{geminiErrorEchoTool()}
+	sess.AppendUserMessage("echo boom")
+
+	var (
+		gotToolCall   *agent.ToolCallEvent
+		gotToolResult *agent.ToolResultEvent
+		gotFatalErr   bool
+		tokens        []string
+	)
+	for ev, err := range a.Run(context.Background(), sess) {
+		if err != nil || ev.Kind == agent.EventKindError {
+			gotFatalErr = true
+		}
+		switch ev.Kind {
+		case agent.EventKindToolCall:
+			gotToolCall = ev.ToolCall
+		case agent.EventKindToolResult:
+			gotToolResult = ev.ToolResult
+		case agent.EventKindToken:
+			tokens = append(tokens, ev.Text)
+		}
+	}
+
+	// Verify tool call was emitted.
+	if gotToolCall == nil {
+		t.Fatal("expected EventKindToolCall, got none")
+	}
+	if gotToolCall.ToolName != "echo" {
+		t.Errorf("ToolCall.ToolName = %q, want %q", gotToolCall.ToolName, "echo")
+	}
+
+	// Verify tool result was emitted with IsError=true.
+	if gotToolResult == nil {
+		t.Fatal("expected EventKindToolResult, got none")
+	}
+	if !gotToolResult.IsError {
+		t.Error("ToolResult.IsError should be true when tool returns error")
+	}
+	if !strings.Contains(gotToolResult.Result, "simulated failure") {
+		t.Errorf("ToolResult.Result = %q, want it to contain the error message", gotToolResult.Result)
+	}
+
+	// No fatal error should occur — the loop should recover.
+	if gotFatalErr {
+		t.Error("expected no fatal error — tool error should be non-fatal")
+	}
+
+	// Second turn should have produced text tokens.
+	if len(tokens) == 0 {
+		t.Error("expected at least one token after tool error recovery")
+	}
+
+	// Server called exactly twice.
+	if n := atomic.LoadInt32(&callCount); n != 2 {
+		t.Errorf("HTTP handler called %d times, want 2", n)
+	}
+}
