@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-04-02
+
 ### Added
 
 - `executeToolLoop` for OpenAI Chat Completions adapter — multi-turn function calling with SSE delta fragment reassembly (#150)
@@ -250,7 +252,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cmd/cure/main.go` — thin entry point wiring the terminal router
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
-[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/mrlm-net/cure/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/mrlm-net/cure/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mrlm-net/cure/compare/v0.8.0...v0.10.0
 [0.8.0]: https://github.com/mrlm-net/cure/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/mrlm-net/cure/compare/v0.6.3...v0.7.0
