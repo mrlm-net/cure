@@ -8,13 +8,13 @@
 
 Cure automates repetitive development tasks through AI context management, code generation, and network diagnostics. Manage multi-turn AI conversations from the terminal (`cure context`), generate templates for AI assistants (`CLAUDE.md`), trace HTTP/TCP/UDP connections with detailed timing and metadata, and output results in developer-friendly formats (NDJSON, HTML). Built with minimal external dependencies and only Go's standard library for core functionality, cure is designed as a foundation for developers who need reliable, auditable tooling without dependency bloat.
 
-The project is under active development — currently at v0.8.0 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
+The project is under active development — currently at v0.10.0 with a stable API planned for v1.0.0. Cure's modular architecture separates reusable packages (`pkg/`) from application-specific logic (`internal/`), making it straightforward to extend with custom commands or embed cure's packages into other tools.
 
 ## Key Features
 
 - **Project bootstrapping** — `cure init` bootstraps a complete project scaffold in one command: AI assistant files, devcontainer, CI workflow, editorconfig, and gitignore; interactive wizard or fully flag-driven for CI use
 - **AI context management** — Start, resume, list, fork, delete, search, and export multi-turn AI conversations from the terminal; sessions are persisted to `~/.local/share/cure/sessions/` and work with any registered provider
-- **Tool use** — The Claude provider executes multi-turn tool loops (up to 32 turns) within a single `context new` or `context resume` session; register tools via the `pkg/agent` API or activate named presets with `--skill <name>`
+- **Tool use** — All three providers (Claude, OpenAI, Gemini) execute multi-turn tool loops (up to 32 turns) within a single `context new` or `context resume` session; register tools via the `pkg/agent` API or activate named presets with `--skill <name>`
 - **Skill registry** — `agent.RegisterSkill` bundles a system prompt with a set of tools under a named preset; `--skill <name>` on `context new` or `context resume` activates the preset for that session
 - **Template generation** — Create `CLAUDE.md` project context files for AI assistants with interactive or flag-driven configuration; `--dry-run` prints output to stdout without writing files
 - **Network tracing** — Trace HTTP requests (DNS resolution, TLS handshake, response timing), TCP connections, and UDP packet exchanges with detailed event streams
@@ -168,7 +168,15 @@ Sessions are stored in `~/.local/share/cure/sessions/` (XDG-compliant). Set `ANT
 
 #### Using tools and skills
 
-The Claude provider supports multi-turn tool use. Skills are named presets that combine a system prompt with a set of tools and are registered at program startup via `agent.RegisterSkill`. Skills do not imply a provider — `--provider` is still required on `context new`.
+All three providers (Claude, OpenAI, and Gemini) support multi-turn tool use via `sess.Tools`. Skills are named presets that combine a system prompt with a set of tools and are registered at program startup via `agent.RegisterSkill`. Skills do not imply a provider — `--provider` is still required on `context new`.
+
+#### Provider capabilities
+
+| Capability | Claude | OpenAI | Gemini |
+|------------|--------|--------|--------|
+| Streaming | Yes | Yes (SSE) | Yes (SSE) |
+| Tool use | Yes | Yes | Yes |
+| Token counting | Yes | Estimate | Estimate |
 
 ```sh
 # Start a session with the "code-review" skill (system prompt + tools pre-loaded)
@@ -181,7 +189,7 @@ cure context resume <id> --skill code-review --message "What about the tests?"
 
 The `code-review` skill above is illustrative — skills must be registered at program startup via `agent.RegisterSkill` in your own program or in a future `skills.json` configuration.
 
-During a tool-augmented session, the REPL annotates tool calls and results to stderr so stdout stays clean for piping. The Claude adapter automatically executes up to 32 sequential tool calls per session turn.
+During a tool-augmented session, the REPL annotates tool calls and results to stderr so stdout stays clean for piping. Each provider adapter automatically executes up to 32 sequential tool calls per session turn.
 
 #### Searching session history
 
@@ -570,7 +578,7 @@ Cancelling the context terminates the stream early.
 
 ### Tool use
 
-Attach tools to a session via `Session.Tools` before calling `Agent.Run`. The Claude adapter automatically executes tool calls and re-invokes the model until the model returns without requesting tools (up to 32 turns). Tool call and tool result events are emitted during the loop.
+Attach tools to a session via `Session.Tools` before calling `Agent.Run`. All three provider adapters (Claude, OpenAI, and Gemini) automatically execute tool calls and re-invoke the model until the model returns without requesting tools (up to 32 turns). Tool call and tool result events are emitted during the loop.
 
 ```go
 // Define a tool with FuncTool — no struct needed.
@@ -974,10 +982,13 @@ For detailed guidance, see `CLAUDE.md` in the repository root.
 
 ## Roadmap
 
-Cure is currently at v0.8.0. The v0.8.0 release delivered project bootstrapping (`cure init`) and three enhancements to session management (`cure context search`, `cure context export`, `pkg/doctor` extraction). The v0.7.0 release added five `cure generate` subcommands — `scaffold`, `devcontainer`, `editorconfig`, `gitignore`, and `github-workflow` — completing the Generation & Scaffolding epic.
+Cure is currently at v0.10.0. The v0.10.0 release completed tool use support with multi-turn tool loops for the Claude provider, skill presets (`--skill`), and the MCP tool bridge. The v0.9.0 release added OpenAI and Gemini provider adapters, session tags, and `cure mcp serve`. The upcoming v0.11.0 release extends tool loop support to all three providers (Claude, OpenAI, Gemini).
 
 Earlier milestones:
 
+- **v0.10.0** — Tool use, skills, MCP integration: Claude tool loop (up to 32 turns), `--skill` flag, `ToolsFromMCPServer` bridge, REPL tool annotations
+- **v0.9.0** — Multi-provider AI: OpenAI and Gemini adapters, session tags, `cure mcp serve`, API stability docs
+- **v0.8.0** — Project Bootstrap: `cure init`, `cure context search`, `cure context export`, `pkg/doctor` extraction
 - **v0.7.0** — Generation & Scaffolding: `cure generate scaffold`, `cure generate devcontainer`, `cure generate editorconfig`, `cure generate gitignore`, `cure generate github-workflow`; programmatic `Generate*` API for all AI-file subcommands
 - **v0.6.x** — Developer experience foundation: `pkg/prompt`, `pkg/fs`, `pkg/style`, `pkg/env`; `cure doctor`; AI assistant template subcommands (`agents-md`, `copilot-instructions`, `cursor-rules`, `windsurf-rules`, `gemini-md`)
 - **v0.5.0** — `pkg/agent`: provider-agnostic AI agent context management, `cure context` command group, Anthropic Claude adapter
@@ -986,7 +997,6 @@ Earlier milestones:
 
 Upcoming milestones:
 
-- **v0.9.0** — Multi-provider AI support, `cure mcp serve` for serving cure as an MCP tool
 - **v1.0.0** — API stability for all `pkg/` packages; freeze of breaking changes
 
 The v1.0.0 milestone marks API stability for `pkg/` packages and freeze of breaking changes. Track progress on the [GitHub Projects board](https://github.com/orgs/mrlm-net/projects/9).
