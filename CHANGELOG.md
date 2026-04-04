@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-04-05
+
+### Added
+
+- `internal/agent/claudecode` — Claude Code CLI adapter (`claude-code` provider) that invokes the `claude` CLI as a subprocess and streams NDJSON events (#159)
+- `claude-code` provider registered via blank import `_ "github.com/mrlm-net/cure/internal/agent/claudecode"` — the main binary now ships all four providers (claude, claude-code, openai, gemini)
+- NDJSON stream parser mapping all five Claude Code event types to `agent.Event` values: `system/init` → `EventKindStart`, assistant text → `EventKindToken`, `tool_use` → `EventKindToolCall`, tool result → `EventKindToolResult`, `result/success` → `EventKindDone`
+- `buildPrompt` — formats session history into a Human/Assistant transcript for multi-turn sessions; passes single messages verbatim
+- `buildArgs` — composes CLI arguments including `--output-format stream-json --verbose` (required), `--model`, `--max-turns`, `--system-prompt`, `--allowedTools`, and `--disabledTools`
+- `NewClaudeCodeAgent` factory with cfg keys: `claude_bin`, `model`, `max_turns`, `allowed_tools`, `disallowed_tools`
+- 4 MiB scanner buffer for large tool result payloads
+- Integration test gated by `CLAUDE_CODE_INTEGRATION=1` environment variable
+- `docs/claude-code-adapter.md` — sample tool guide and autonomous dev-agent blueprint
+
 ## [0.11.0] - 2026-04-02
 
 ### Added
@@ -253,6 +267,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project scaffolding: Makefile, Go module, CI-ready test and lint targets
 
 [Unreleased]: https://github.com/mrlm-net/cure/compare/v0.11.0...HEAD
+[0.11.1]: https://github.com/mrlm-net/cure/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/mrlm-net/cure/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mrlm-net/cure/compare/v0.8.0...v0.10.0
 [0.8.0]: https://github.com/mrlm-net/cure/compare/v0.7.0...v0.8.0
