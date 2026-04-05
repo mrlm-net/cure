@@ -17,11 +17,26 @@ type Tool interface {
 
 // FuncTool creates a Tool from a name, description, schema map, and function.
 // This is a convenience constructor to avoid defining a new struct for simple tools.
+//
+// The schema parameter must be a non-nil JSON Schema object with "type": "object".
+// The minimal valid schema is:
+//
+//	map[string]any{"type": "object"}
+//
+// FuncTool panics at registration time if schema is nil or if schema["type"] is
+// not "object". Early panics catch misconfigured tools before any agent session
+// starts.
 func FuncTool(
 	name, desc string,
 	schema map[string]any,
 	fn func(context.Context, map[string]any) (string, error),
 ) Tool {
+	if schema == nil {
+		panic(`agent.FuncTool: tool "` + name + `" has nil schema; schema must be a JSON Schema object (map["type"]="object")`)
+	}
+	if typ, _ := schema["type"].(string); typ != "object" {
+		panic(`agent.FuncTool: tool "` + name + `" schema["type"] is "` + typ + `", expected "object"`)
+	}
 	return &funcTool{name: name, desc: desc, schema: schema, fn: fn}
 }
 
