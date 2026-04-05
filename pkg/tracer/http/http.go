@@ -18,10 +18,15 @@ import (
 // TraceURL performs an HTTP request to the specified URL and emits lifecycle events.
 //
 // Events emitted (in order):
+//   - http_request_start
+//   - conn_reused (if connection was reused from pool)
 //   - dns_start, dns_done
 //   - tcp_connect_start, tcp_connect_done
 //   - tls_handshake_start, tls_handshake_done (if HTTPS)
-//   - http_request_start, http_response_done
+//   - request_written (when request is fully sent to wire)
+//   - http_redirect (once per redirect hop, with from/to/status_code)
+//   - ttfb (time to first response byte)
+//   - http_response_done
 //
 // Example:
 //
@@ -67,9 +72,23 @@ func TraceURL(ctx context.Context, url string, opts ...Option) error {
 		req.Header.Set(k, v)
 	}
 
+	// Emit request start event (before trace hooks so it appears first)
+	reqStart := time.Now()
+	emit(cfg.emitter, "http_request_start", traceID, map[string]interface{}{
+		"method":  cfg.method,
+		"url":     url,
+		"headers": redactHeaders(req.Header, cfg.redact),
+	})
+
 	// Set up HTTP trace hooks
-	var dnsStart, tcpStart, tlsStart, reqStart time.Time
+	var dnsStart, tcpStart, tlsStart, writeStart time.Time
 	trace := &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			emit(cfg.emitter, "conn_reused", traceID, map[string]interface{}{
+				"reused":   info.Reused,
+				"was_idle": info.WasIdle,
+			})
+		},
 		DNSStart: func(info httptrace.DNSStartInfo) {
 			dnsStart = time.Now()
 			emit(cfg.emitter, "dns_start", traceID, map[string]interface{}{
@@ -121,23 +140,49 @@ func TraceURL(ctx context.Context, url string, opts ...Option) error {
 			}
 			emit(cfg.emitter, "tls_handshake_done", traceID, data)
 		},
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			duration := time.Since(writeStart).Milliseconds()
+			data := map[string]interface{}{
+				"duration_ms": duration,
+			}
+			if info.Err != nil {
+				data["error"] = info.Err.Error()
+			}
+			emit(cfg.emitter, "request_written", traceID, data)
+		},
 		GotFirstResponseByte: func() {
-			// Optional: track time to first byte
+			duration := time.Since(reqStart).Milliseconds()
+			emit(cfg.emitter, "ttfb", traceID, map[string]interface{}{
+				"duration_ms": duration,
+			})
 		},
 	}
 
+	writeStart = time.Now()
 	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
 
-	// Emit request start event
-	reqStart = time.Now()
-	emit(cfg.emitter, "http_request_start", traceID, map[string]interface{}{
-		"method":  cfg.method,
-		"url":     url,
-		"headers": redactHeaders(req.Header, cfg.redact),
-	})
-
-	// Execute request
-	client := &nethttp.Client{}
+	// Execute request — CheckRedirect emits http_redirect for every hop
+	client := &nethttp.Client{
+		CheckRedirect: func(req *nethttp.Request, via []*nethttp.Request) error {
+			if len(via) > 0 {
+				prev := via[len(via)-1]
+				statusCode := 0
+				if req.Response != nil {
+					statusCode = req.Response.StatusCode
+				}
+				emit(cfg.emitter, "http_redirect", traceID, map[string]interface{}{
+					"from":        prev.URL.String(),
+					"to":          req.URL.String(),
+					"hop":         len(via),
+					"status_code": statusCode,
+				})
+			}
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			return nil
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
@@ -283,6 +328,12 @@ func emitDryRunEvents(em event.Emitter, traceID, url string) error {
 		return nil
 	}
 
+	// HTTP request start
+	em.Emit(event.NewEvent("http_request_start", traceID, map[string]interface{}{"method": "GET", "url": url}))
+
+	// Connection info
+	em.Emit(event.NewEvent("conn_reused", traceID, map[string]interface{}{"reused": false, "was_idle": false}))
+
 	// DNS events
 	em.Emit(event.NewEvent("dns_start", traceID, map[string]interface{}{"host": "example.com"}))
 	em.Emit(event.NewEvent("dns_done", traceID, map[string]interface{}{"ip": "93.184.216.34", "duration_ms": 10}))
@@ -297,8 +348,24 @@ func emitDryRunEvents(em event.Emitter, traceID, url string) error {
 		em.Emit(event.NewEvent("tls_handshake_done", traceID, map[string]interface{}{"duration_ms": 100, "version": "TLS 1.3"}))
 	}
 
-	// HTTP events
-	em.Emit(event.NewEvent("http_request_start", traceID, map[string]interface{}{"method": "GET", "url": url}))
+	// Request written to wire
+	em.Emit(event.NewEvent("request_written", traceID, map[string]interface{}{"duration_ms": 1}))
+
+	// Redirect (synthetic example for http:// URLs redirecting to https://)
+	if strings.HasPrefix(url, "http://") {
+		httpsURL := "https://" + strings.TrimPrefix(url, "http://")
+		em.Emit(event.NewEvent("http_redirect", traceID, map[string]interface{}{
+			"from":        url,
+			"to":          httpsURL,
+			"hop":         1,
+			"status_code": 301,
+		}))
+	}
+
+	// Time to first byte
+	em.Emit(event.NewEvent("ttfb", traceID, map[string]interface{}{"duration_ms": 120}))
+
+	// HTTP response done
 	em.Emit(event.NewEvent("http_response_done", traceID, map[string]interface{}{"status": 200, "body_size": 1256, "duration_ms": 300}))
 
 	return nil
