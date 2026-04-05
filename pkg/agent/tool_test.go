@@ -3,6 +3,7 @@ package agent_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/mrlm-net/cure/pkg/agent"
@@ -42,7 +43,7 @@ func TestFuncTool(t *testing.T) {
 			name:     "error propagates from fn",
 			toolName: "failing",
 			desc:     "Always fails",
-			schema:   nil,
+			schema:   map[string]any{"type": "object"},
 			fn: func(_ context.Context, _ map[string]any) (string, error) {
 				return "", errors.New("tool error")
 			},
@@ -53,7 +54,7 @@ func TestFuncTool(t *testing.T) {
 			name:     "nil context does not panic",
 			toolName: "noop",
 			desc:     "Does nothing",
-			schema:   nil,
+			schema:   map[string]any{"type": "object"},
 			fn: func(_ context.Context, _ map[string]any) (string, error) {
 				return "ok", nil
 			},
@@ -98,7 +99,7 @@ func BenchmarkFuncTool_Call(b *testing.B) {
 	tool := agent.FuncTool(
 		"bench",
 		"Benchmark tool",
-		nil,
+		map[string]any{"type": "object"},
 		func(_ context.Context, args map[string]any) (string, error) {
 			v, _ := args["x"].(string)
 			return v, nil
@@ -109,5 +110,58 @@ func BenchmarkFuncTool_Call(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = tool.Call(ctx, args)
+	}
+}
+
+func TestFuncTool_NilSchemaPanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic for nil schema, got none")
+		}
+		msg, _ := r.(string)
+		if !strings.Contains(msg, "nil schema") {
+			t.Errorf("panic message %q does not mention nil schema", msg)
+		}
+		if !strings.Contains(msg, "myTool") {
+			t.Errorf("panic message %q does not include tool name", msg)
+		}
+	}()
+	agent.FuncTool("myTool", "desc", nil, func(_ context.Context, _ map[string]any) (string, error) {
+		return "", nil
+	})
+}
+
+func TestFuncTool_WrongTypePanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic for wrong schema type, got none")
+		}
+		msg, _ := r.(string)
+		if !strings.Contains(msg, `"array"`) {
+			t.Errorf("panic message %q does not include actual type value", msg)
+		}
+		if !strings.Contains(msg, "myTool") {
+			t.Errorf("panic message %q does not include tool name", msg)
+		}
+	}()
+	agent.FuncTool("myTool", "desc", map[string]any{"type": "array"}, func(_ context.Context, _ map[string]any) (string, error) {
+		return "", nil
+	})
+}
+
+func TestFuncTool_ValidObjectSchemaPasses(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"x": map[string]any{"type": "string"},
+		},
+	}
+	tool := agent.FuncTool("myTool", "desc", schema, func(_ context.Context, _ map[string]any) (string, error) {
+		return "ok", nil
+	})
+	if tool.Name() != "myTool" {
+		t.Errorf("Name() = %q, want %q", tool.Name(), "myTool")
 	}
 }

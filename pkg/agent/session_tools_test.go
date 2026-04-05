@@ -15,7 +15,7 @@ import (
 func TestSession_ToolsTransient(t *testing.T) {
 	sess := agent.NewSession("claude", "claude-opus-4-6")
 	sess.Tools = []agent.Tool{
-		agent.FuncTool("my-tool", "desc", nil,
+		agent.FuncTool("my-tool", "desc", map[string]any{"type": "object"},
 			func(_ context.Context, _ map[string]any) (string, error) { return "ok", nil },
 		),
 	}
@@ -41,7 +41,7 @@ func TestSession_ToolsTransient(t *testing.T) {
 func TestSession_ToolsTransient_UnmarshalRestoresNil(t *testing.T) {
 	orig := agent.NewSession("claude", "claude-opus-4-6")
 	orig.Tools = []agent.Tool{
-		agent.FuncTool("t", "d", nil,
+		agent.FuncTool("t", "d", map[string]any{"type": "object"},
 			func(_ context.Context, _ map[string]any) (string, error) { return "", nil },
 		),
 	}
@@ -68,10 +68,10 @@ func TestSession_ToolsTransient_UnmarshalRestoresNil(t *testing.T) {
 func TestSessionFork_ToolsSliceHeaderIndependent(t *testing.T) {
 	orig := agent.NewSession("p", "m")
 	orig.Tools = []agent.Tool{
-		agent.FuncTool("t1", "tool 1", nil,
+		agent.FuncTool("t1", "tool 1", map[string]any{"type": "object"},
 			func(_ context.Context, _ map[string]any) (string, error) { return "1", nil },
 		),
-		agent.FuncTool("t2", "tool 2", nil,
+		agent.FuncTool("t2", "tool 2", map[string]any{"type": "object"},
 			func(_ context.Context, _ map[string]any) (string, error) { return "2", nil },
 		),
 	}

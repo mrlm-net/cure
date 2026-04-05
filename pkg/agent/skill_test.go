@@ -11,7 +11,7 @@ func TestRegisterSkillAndLookup(t *testing.T) {
 	agent.ResetSkillRegistry()
 	t.Cleanup(agent.ResetSkillRegistry)
 
-	echoTool := agent.FuncTool("echo", "echo tool", nil,
+	echoTool := agent.FuncTool("echo", "echo tool", map[string]any{"type": "object"},
 		func(_ context.Context, _ map[string]any) (string, error) { return "ok", nil },
 	)
 
