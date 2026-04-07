@@ -13,9 +13,10 @@ import (
 // property: tool implementations (closures, stateful objects) must never be
 // written to the session file on disk.
 func TestSession_ToolsTransient(t *testing.T) {
+	minSchema := map[string]any{"type": "object", "properties": map[string]any{}}
 	sess := agent.NewSession("claude", "claude-opus-4-6")
 	sess.Tools = []agent.Tool{
-		agent.FuncTool("my-tool", "desc", nil,
+		agent.FuncTool("my-tool", "desc", minSchema,
 			func(_ context.Context, _ map[string]any) (string, error) { return "ok", nil },
 		),
 	}
@@ -39,9 +40,10 @@ func TestSession_ToolsTransient(t *testing.T) {
 // session through JSON leaves Tools as nil (since it is json:"-"). The caller is
 // responsible for re-attaching tools after loading a persisted session.
 func TestSession_ToolsTransient_UnmarshalRestoresNil(t *testing.T) {
+	minSchema := map[string]any{"type": "object", "properties": map[string]any{}}
 	orig := agent.NewSession("claude", "claude-opus-4-6")
 	orig.Tools = []agent.Tool{
-		agent.FuncTool("t", "d", nil,
+		agent.FuncTool("t", "d", minSchema,
 			func(_ context.Context, _ map[string]any) (string, error) { return "", nil },
 		),
 	}
@@ -66,12 +68,13 @@ func TestSession_ToolsTransient_UnmarshalRestoresNil(t *testing.T) {
 // original's length. Note that slice elements are shared (shallow copy) — mutating
 // a Tool at a given index in the fork would affect the original at the same index.
 func TestSessionFork_ToolsSliceHeaderIndependent(t *testing.T) {
+	minSchema := map[string]any{"type": "object", "properties": map[string]any{}}
 	orig := agent.NewSession("p", "m")
 	orig.Tools = []agent.Tool{
-		agent.FuncTool("t1", "tool 1", nil,
+		agent.FuncTool("t1", "tool 1", minSchema,
 			func(_ context.Context, _ map[string]any) (string, error) { return "1", nil },
 		),
-		agent.FuncTool("t2", "tool 2", nil,
+		agent.FuncTool("t2", "tool 2", minSchema,
 			func(_ context.Context, _ map[string]any) (string, error) { return "2", nil },
 		),
 	}

@@ -1,6 +1,9 @@
 package agent
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // Tool is a callable function that an Agent may invoke during an agentic session.
 // Use [FuncTool] to create a Tool from a plain function without defining a struct.
@@ -15,13 +18,31 @@ type Tool interface {
 	Call(ctx context.Context, args map[string]any) (string, error)
 }
 
-// FuncTool creates a Tool from a name, description, schema map, and function.
+// FuncTool creates a [Tool] from a name, description, JSON Schema map, and function.
+//
 // This is a convenience constructor to avoid defining a new struct for simple tools.
+//
+// Schema contract: schema must not be nil, and schema["type"] must equal "object".
+// Violating either constraint causes a panic at construction time with a descriptive
+// message that includes the tool name. Example of a valid minimal schema:
+//
+//	map[string]any{
+//	    "type": "object",
+//	    "properties": map[string]any{},
+//	}
 func FuncTool(
 	name, desc string,
 	schema map[string]any,
 	fn func(context.Context, map[string]any) (string, error),
 ) Tool {
+	if schema == nil {
+		panic("agent.FuncTool: schema must not be nil for tool " + name +
+			`; provide a JSON Schema map with "type": "object"`)
+	}
+	if typ, _ := schema["type"].(string); typ != "object" {
+		panic("agent.FuncTool: schema[\"type\"] must be \"object\" for tool " + name +
+			"; got " + fmt.Sprintf("%v", schema["type"]))
+	}
 	return &funcTool{name: name, desc: desc, schema: schema, fn: fn}
 }
 
