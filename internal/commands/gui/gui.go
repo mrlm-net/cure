@@ -16,6 +16,13 @@ import (
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/doctor"
 	"github.com/mrlm-net/cure/pkg/terminal"
+
+	// Register providers — API (true token streaming), text-streaming CLI
+	// (subscription auth, real streaming via --output-format text), and the
+	// NDJSON CLI adapter (kept for non-GUI use; not used in makeAgentRun).
+	_ "github.com/mrlm-net/cure/internal/agent/claude"
+	_ "github.com/mrlm-net/cure/internal/agent/claudecode"
+	_ "github.com/mrlm-net/cure/internal/agent/claudestream"
 )
 
 // GUICommand starts the browser-based GUI server.
@@ -63,14 +70,59 @@ func (c *GUICommand) Flags() *flag.FlagSet {
 	return fs
 }
 
+// makeAgentRun creates an AgentRunFunc, preferring the API provider (true
+// token streaming via ANTHROPIC_API_KEY), falling back to the text-streaming
+// Claude Code CLI adapter (subscription auth, --output-format text).
+func makeAgentRun(cfgData config.ConfigObject) api.AgentRunFunc {
+	model, _ := cfgData["agent.claude.model"].(string)
+	if model == "" {
+		model = "claude-sonnet-4-6"
+	}
+
+	// Try API provider first — true token streaming via ANTHROPIC_API_KEY.
+	a, err := agent.New("claude", map[string]any{
+		"model": model,
+	})
+	if err != nil {
+		// No API key — use the text-streaming CLI adapter.
+		// --output-format text pipes response text as it is generated,
+		// giving real streaming via the user's Claude subscription auth.
+		a, err = agent.New("claude-stream", map[string]any{
+			"model": model,
+		})
+	}
+	if err != nil {
+		return nil // fall back to echo stub
+	}
+
+	return func(ctx context.Context, sess *agent.Session) <-chan api.AgentResult {
+		ch := make(chan api.AgentResult, 16)
+		go func() {
+			defer close(ch)
+			for ev, err := range a.Run(ctx, sess) {
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- api.AgentResult{Event: ev, Err: err}:
+				}
+				if err != nil {
+					return
+				}
+			}
+		}()
+		return ch
+	}
+}
+
 // Run starts the GUI server and blocks until the context is cancelled or
 // SIGINT/SIGTERM is received.
 func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 	deps := api.Deps{
-		Config: c.cfgData,
-		Checks: c.checks,
-		Port:   c.port,
-		Store:  c.store,
+		Config:   c.cfgData,
+		Checks:   c.checks,
+		Port:     c.port,
+		Store:    c.store,
+		AgentRun: makeAgentRun(c.cfgData),
 	}
 
 	apiRouter := api.NewAPIRouter(deps)
