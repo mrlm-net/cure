@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/mrlm-net/cure/pkg/agent"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/doctor"
 )
@@ -21,6 +22,15 @@ type Deps struct {
 
 	// Port is the TCP port the GUI server is listening on.
 	Port int
+
+	// Store is the session persistence layer used by CRUD and SSE endpoints.
+	// When nil, session endpoints return 501 Not Implemented.
+	Store agent.SessionStore
+
+	// AgentRun is an optional function that runs an agent turn on a session
+	// and streams results. When nil, the messages endpoint uses a built-in
+	// echo stub that reflects the user's message back as word-level tokens.
+	AgentRun AgentRunFunc
 }
 
 // NewAPIRouter returns an http.Handler that mounts all /api/* routes.
@@ -35,5 +45,35 @@ func NewAPIRouter(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/generate/list", generateListHandler())
 	mux.HandleFunc("POST /api/generate/{template}", generateRunHandler())
 
+	// Session endpoints require a store. When absent, all session routes
+	// return 501 to signal that the feature is unavailable.
+	if deps.Store != nil {
+		defaults := configDefaults{
+			defaultProvider: configString(deps.Config, "agent.provider"),
+			defaultModel:    configString(deps.Config, "agent.model"),
+		}
+
+		mux.HandleFunc("GET /api/context/sessions", sessionsListHandler(deps.Store))
+		mux.HandleFunc("POST /api/context/sessions", sessionsCreateHandler(deps.Store, defaults))
+		mux.HandleFunc("GET /api/context/sessions/{id}", sessionsGetHandler(deps.Store))
+		mux.HandleFunc("DELETE /api/context/sessions/{id}", sessionsDeleteHandler(deps.Store))
+		mux.HandleFunc("POST /api/context/sessions/{id}/fork", sessionsForkHandler(deps.Store))
+		mux.HandleFunc("POST /api/context/sessions/{id}/messages", messagesHandler(deps.Store, deps.AgentRun))
+	}
+
 	return mux
+}
+
+// configString extracts a dot-notation string value from ConfigObject.
+// Returns empty string when the key is absent or not a string.
+func configString(cfg config.ConfigObject, key string) string {
+	if cfg == nil {
+		return ""
+	}
+	v, ok := cfg[key]
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
 }
