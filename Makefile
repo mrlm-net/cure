@@ -37,6 +37,7 @@ gui-deps:
 
 gui-frontend: gui-deps
 	cd frontend && npm run build
+	touch internal/gui/dist/.gitkeep
 
 gui-build: gui-frontend
 	go build -o $(BUILD_DIR)/$(BINARY) ./cmd/cure
