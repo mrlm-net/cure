@@ -41,3 +41,10 @@ bin/
 website/build/
 website/.svelte-kit/
 website/node_modules/
+
+# Frontend (GUI) build artifacts — keep .gitkeep so //go:embed dist compiles on clean clone
+internal/gui/dist/*
+!internal/gui/dist/.gitkeep
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
