@@ -32,6 +32,8 @@ func NewAPIRouter(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/health", healthHandler(deps.Port))
 	mux.HandleFunc("GET /api/config", configHandler(deps.Config))
 	mux.HandleFunc("GET /api/doctor", doctorHandler(deps.Checks))
+	mux.HandleFunc("GET /api/generate/list", generateListHandler())
+	mux.HandleFunc("POST /api/generate/{template}", generateRunHandler())
 
 	return mux
 }
