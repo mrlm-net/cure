@@ -4,5 +4,5 @@ package gui
 
 import "embed"
 
-//go:embed dist
+//go:embed all:dist
 var distFS embed.FS

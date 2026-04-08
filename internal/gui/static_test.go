@@ -125,8 +125,8 @@ func TestNewSPAHandler(t *testing.T) {
 	})
 
 	t.Run("nil FS returns 503", func(t *testing.T) {
-		// emptyFS has no "dist" subdirectory, so fs.Sub fails.
-		handler := NewSPAHandler(emptyFS{}, port)
+		// noDistFS has no "dist" subdirectory, so fs.Sub fails.
+		handler := NewSPAHandler(noDistFS{}, port)
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 
@@ -213,6 +213,14 @@ func TestServeIndexWithPort(t *testing.T) {
 			t.Errorf("port count = %d, want 2", count)
 		}
 	})
+}
+
+// noDistFS is a minimal fs.FS that contains no "dist" subdirectory,
+// used to test the SPA handler's 503 fallback path.
+type noDistFS struct{}
+
+func (noDistFS) Open(name string) (fs.File, error) {
+	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 }
 
 // memFile is a minimal fs.File backed by a byte slice for testing.
