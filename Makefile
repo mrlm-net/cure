@@ -1,4 +1,4 @@
-.PHONY: build test bench lint clean docker-build docker-push
+.PHONY: build test bench lint clean docker-build docker-push gui-deps gui-frontend gui-build gui-dev
 
 BINARY    := cure
 MODULE    := github.com/mrlm-net/cure
@@ -10,7 +10,7 @@ build:
 	go build -o $(BUILD_DIR)/$(BINARY) ./cmd/cure
 
 test:
-	go test -race -count=1 ./...
+	go test -tags no_frontend -race -count=1 ./...
 
 bench:
 	go test -bench=. -benchmem -benchtime=3s ./pkg/fs/...
@@ -30,3 +30,17 @@ docker-build:
 
 docker-push:
 	docker push $(IMAGE):$(TAG)
+
+## Frontend targets
+gui-deps:
+	cd frontend && npm ci
+
+gui-frontend: gui-deps
+	cd frontend && npm run build
+	touch internal/gui/dist/.gitkeep
+
+gui-build: gui-frontend
+	go build -o $(BUILD_DIR)/$(BINARY) ./cmd/cure
+
+gui-dev:
+	cd frontend && npm run dev
