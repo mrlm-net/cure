@@ -14,11 +14,13 @@ import (
 	ctxcmd "github.com/mrlm-net/cure/internal/commands/context"
 	"github.com/mrlm-net/cure/internal/commands/doctor"
 	"github.com/mrlm-net/cure/internal/commands/generate"
+	guicmd "github.com/mrlm-net/cure/internal/commands/gui"
 	initcmd "github.com/mrlm-net/cure/internal/commands/init"
 	mcmcmd "github.com/mrlm-net/cure/internal/commands/mcp"
 	"github.com/mrlm-net/cure/internal/commands/trace"
 	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
 	"github.com/mrlm-net/cure/pkg/config"
+	pkgdoctor "github.com/mrlm-net/cure/pkg/doctor"
 	"github.com/mrlm-net/cure/pkg/template"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
@@ -57,6 +59,8 @@ func run(args []string) error {
 	router.Register(initcmd.NewInitCommand())
 	// Register mcp BEFORE completion so it is visible to completion introspection.
 	router.Register(mcmcmd.NewMCPCommand())
+	// Register gui BEFORE completion so it is visible to completion introspection.
+	router.Register(guicmd.NewGUICommand(cfg.Data(), pkgdoctor.BuiltinChecks(), sessionStore))
 	router.Register(completion.NewCompletionCommand(router))
 	return router.RunArgs(args)
 }

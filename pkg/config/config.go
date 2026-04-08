@@ -34,6 +34,22 @@ func NewConfig(objs ...ConfigObject) *Config {
 	return &Config{data: result}
 }
 
+// Data returns a shallow copy of the merged configuration as a ConfigObject.
+// The returned map shares nested values with the Config, so callers must not
+// mutate nested structures. This is primarily useful for serialisation (e.g.,
+// JSON marshalling) where the unexported data field would otherwise be
+// inaccessible.
+func (c *Config) Data() ConfigObject {
+	if c == nil || c.data == nil {
+		return ConfigObject{}
+	}
+	out := make(ConfigObject, len(c.data))
+	for k, v := range c.data {
+		out[k] = v
+	}
+	return out
+}
+
 // Get retrieves a value by key using dot notation.
 // Returns fallback if key is missing or if multiple fallbacks are provided,
 // returns the first one.

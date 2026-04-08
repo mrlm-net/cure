@@ -218,3 +218,42 @@ func TestConfig_Set_Nil(t *testing.T) {
 	var cfg *Config
 	cfg.Set("key", "value") // Should not panic
 }
+
+func TestConfig_Data(t *testing.T) {
+	t.Run("returns shallow copy of merged data", func(t *testing.T) {
+		cfg := NewConfig(ConfigObject{
+			"timeout": 30,
+			"verbose": false,
+		})
+		data := cfg.Data()
+		if len(data) != 2 {
+			t.Errorf("Data() has %d keys, want 2", len(data))
+		}
+		if data["timeout"] != 30 {
+			t.Errorf("timeout = %v, want 30", data["timeout"])
+		}
+		if data["verbose"] != false {
+			t.Errorf("verbose = %v, want false", data["verbose"])
+		}
+	})
+
+	t.Run("nil config returns empty object", func(t *testing.T) {
+		var cfg *Config
+		data := cfg.Data()
+		if data == nil {
+			t.Fatal("Data() returned nil, want empty ConfigObject")
+		}
+		if len(data) != 0 {
+			t.Errorf("Data() has %d keys, want 0", len(data))
+		}
+	})
+
+	t.Run("mutation of returned map does not affect config", func(t *testing.T) {
+		cfg := NewConfig(ConfigObject{"key": "value"})
+		data := cfg.Data()
+		data["new"] = "added"
+		if cfg.Get("new", nil) != nil {
+			t.Error("mutating Data() result affected the original Config")
+		}
+	})
+}
