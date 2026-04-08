@@ -3,7 +3,7 @@
  * Base URL is derived from window.__CURE_PORT__ injected by the Go server.
  */
 
-function getBaseUrl(): string {
+export function getBaseUrl(): string {
 	if (typeof window !== 'undefined') {
 		const port = window.__CURE_PORT__;
 		if (port && port > 0) {
