@@ -61,7 +61,12 @@ func run(args []string) error {
 	// Register mcp BEFORE completion so it is visible to completion introspection.
 	router.Register(mcmcmd.NewMCPCommand())
 	// Register gui BEFORE completion so it is visible to completion introspection.
-	router.Register(guicmd.NewGUICommand(cfg.Data(), pkgdoctor.BuiltinChecks(), sessionStore))
+	// Initialise project store for project detection and GUI.
+	var projectStore *project.Store
+	if baseDir, err := project.DefaultBaseDir(); err == nil {
+		projectStore = project.NewStore(baseDir)
+	}
+	router.Register(guicmd.NewGUICommand(cfg.Data(), pkgdoctor.BuiltinChecks(), sessionStore, projectStore))
 	router.Register(completion.NewCompletionCommand(router))
 	return router.RunArgs(args)
 }

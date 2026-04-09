@@ -30,12 +30,15 @@ func sessionsListHandler(store agent.SessionStore) http.HandlerFunc {
 
 // sessionsCreateHandler creates a new session. Provider and model fall back
 // to config defaults when omitted from the request body.
-func sessionsCreateHandler(store agent.SessionStore, cfg configDefaults) http.HandlerFunc {
+func sessionsCreateHandler(store agent.SessionStore, cfg configDefaults, projectName string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateSessionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
-			return
+		// Allow empty body — all fields are optional with defaults.
+		if r.Body != nil && r.ContentLength != 0 {
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeError(w, http.StatusBadRequest, "invalid request body")
+				return
+			}
 		}
 
 		provider := req.Provider
@@ -48,6 +51,13 @@ func sessionsCreateHandler(store agent.SessionStore, cfg configDefaults) http.Ha
 		}
 
 		sess := agent.NewSession(provider, model)
+		sess.Name = agent.DefaultName(provider, sess.ID)
+		// Use project from request body if provided, otherwise fall back to auto-detected.
+		if req.ProjectName != "" {
+			sess.ProjectName = req.ProjectName
+		} else {
+			sess.ProjectName = projectName
+		}
 		if err := store.Save(r.Context(), sess); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to save session")
 			return
@@ -121,15 +131,26 @@ func sessionToSummary(s *agent.Session) SessionSummary {
 	if tags == nil {
 		tags = []string{}
 	}
+	name := s.Name
+	if name == "" {
+		name = agent.DefaultName(s.Provider, s.ID)
+	}
 	return SessionSummary{
-		ID:        s.ID,
-		Provider:  s.Provider,
-		Model:     s.Model,
-		Tags:      tags,
-		CreatedAt: s.CreatedAt,
-		UpdatedAt: s.UpdatedAt,
-		ForkOf:    s.ForkOf,
-		Turns:     len(s.History),
+		ID:          s.ID,
+		Provider:    s.Provider,
+		Model:       s.Model,
+		Tags:        tags,
+		CreatedAt:   s.CreatedAt,
+		UpdatedAt:   s.UpdatedAt,
+		ForkOf:      s.ForkOf,
+		Turns:       len(s.History),
+		Name:        name,
+		ProjectName: s.ProjectName,
+		BranchName:  s.BranchName,
+		RepoName:    s.RepoName,
+		WorkItems:   s.WorkItems,
+		AgentRole:   s.AgentRole,
+		SkillName:   s.SkillName,
 	}
 }
 

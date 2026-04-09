@@ -10,18 +10,31 @@
 		provider: string;
 		model: string;
 		updated_at: string;
-		turn_count: number;
+		turns: number;
+		name?: string;
+		project_name?: string;
+		branch_name?: string;
+		work_items?: string[];
+		agent_role?: string;
+		skill_name?: string;
+	}
+
+	interface ProjectInfo {
+		name: string;
+		description?: string;
 	}
 
 	let sessions = $state<Session[]>([]);
+	let projects = $state<ProjectInfo[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let mutating = $state(false);
+	let showCreateForm = $state(false);
+	let selectedProject = $state('');
 
 	async function fetchSessions(): Promise<void> {
 		try {
-			const data = await apiFetch<{ sessions: Session[] }>('/api/context/sessions');
-			sessions = data.sessions ?? [];
+			sessions = await apiFetch<Session[]>('/api/context/sessions');
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load sessions';
 		} finally {
@@ -29,13 +42,33 @@
 		}
 	}
 
+	async function fetchProjects(): Promise<void> {
+		try {
+			projects = await apiFetch<ProjectInfo[]>('/api/project');
+			if (projects.length > 0 && !selectedProject) {
+				selectedProject = projects[0].name;
+			}
+		} catch {
+			// Projects API may not be available — not critical
+		}
+	}
+
 	async function createSession(): Promise<void> {
-		if (mutating) return;
+		if (mutating || !selectedProject) return;
 		mutating = true;
 		error = null;
 		try {
-			await apiFetch<{ id: string }>('/api/context/sessions', { method: 'POST' });
-			await fetchSessions();
+			const data = await apiFetch<{ id: string }>('/api/context/sessions', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ project_name: selectedProject })
+			});
+			showCreateForm = false;
+			if (data?.id) {
+				goto(`/context/${data.id}`);
+			} else {
+				await fetchSessions();
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to create session';
 		} finally {
@@ -74,6 +107,7 @@
 
 	$effect(() => {
 		fetchSessions();
+		fetchProjects();
 	});
 </script>
 
@@ -84,15 +118,50 @@
 <div class="space-y-6">
 	<!-- Header -->
 	<div class="flex items-center justify-between">
-		<h1 class="text-xl font-semibold tracking-tight text-[#e6edf3]">Context Sessions</h1>
+		<h1 class="text-xl font-semibold tracking-tight text-[#e6edf3]">Sessions</h1>
 		<button
-			onclick={createSession}
-			disabled={mutating}
-			class="rounded-md bg-[#58a6ff] px-4 py-2 text-sm font-medium text-[#0d1117] transition-colors hover:bg-[#79b8ff] disabled:opacity-50 disabled:cursor-not-allowed"
+			onclick={() => (showCreateForm = !showCreateForm)}
+			class="rounded-md bg-[#58a6ff] px-4 py-2 text-sm font-medium text-[#0d1117] transition-colors hover:bg-[#79b8ff]"
 		>
-			{mutating ? 'Working...' : 'New Session'}
+			New Session
 		</button>
 	</div>
+
+	<!-- Create session form -->
+	{#if showCreateForm}
+		<div class="rounded-lg border border-[#58a6ff]/30 bg-[#161b22] p-4">
+			<div class="flex items-end gap-3">
+				<div class="flex-1">
+					<label for="project-select" class="mb-1 block text-xs font-medium text-[rgba(230,237,243,0.5)]">Project scope</label>
+					<select
+						id="project-select"
+						bind:value={selectedProject}
+						class="w-full rounded-md border border-white/10 bg-[#0d1117] px-3 py-2 text-sm text-[#e6edf3] focus:border-[#58a6ff]/50 focus:outline-none"
+					>
+						{#each projects as p}
+							<option value={p.name}>{p.name}{p.description ? ` — ${p.description}` : ''}</option>
+						{/each}
+					</select>
+				</div>
+				<button
+					onclick={createSession}
+					disabled={mutating || !selectedProject}
+					class="rounded-md bg-[#58a6ff] px-4 py-2 text-sm font-medium text-[#0d1117] transition-colors hover:bg-[#79b8ff] disabled:opacity-50 disabled:cursor-not-allowed"
+				>
+					{mutating ? 'Creating...' : 'Create'}
+				</button>
+				<button
+					onclick={() => (showCreateForm = false)}
+					class="rounded-md bg-white/5 px-3 py-2 text-sm text-[rgba(230,237,243,0.5)] hover:bg-white/10"
+				>
+					Cancel
+				</button>
+			</div>
+			{#if projects.length === 0}
+				<p class="mt-2 text-xs text-[rgba(230,237,243,0.3)]">No projects found. Create one with <code class="rounded bg-white/5 px-1 py-0.5">cure project init</code></p>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Error -->
 	{#if error}
@@ -139,7 +208,7 @@
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-3">
 							<span class="font-mono text-sm text-[#58a6ff]">
-								{session.id.slice(0, 8)}
+								{session.name || session.id.slice(0, 8)}
 							</span>
 							{#if session.provider}
 								<span
@@ -148,15 +217,26 @@
 									{session.provider}
 								</span>
 							{/if}
-							{#if session.model}
-								<span class="text-xs text-[rgba(230,237,243,0.4)]">
-									{session.model}
+							{#if session.agent_role}
+								<span class="rounded bg-[#58a6ff]/10 px-2 py-0.5 text-xs text-[#58a6ff]/70">
+									{session.agent_role}
 								</span>
 							{/if}
 						</div>
-						<div class="mt-1 flex items-center gap-3 text-xs text-[rgba(230,237,243,0.3)]">
+						<div class="mt-1 flex flex-wrap items-center gap-3 text-xs text-[rgba(230,237,243,0.3)]">
 							<span>{formatRelativeTime(session.updated_at)}</span>
-							<span>{session.turn_count} turn{session.turn_count !== 1 ? 's' : ''}</span>
+							<span>{session.turns} turn{session.turns !== 1 ? 's' : ''}</span>
+							{#if session.project_name}
+								<span class="text-[rgba(230,237,243,0.4)]">{session.project_name}</span>
+							{/if}
+							{#if session.branch_name}
+								<span class="font-mono text-[rgba(230,237,243,0.35)]">{session.branch_name}</span>
+							{/if}
+							{#if session.work_items?.length}
+								<span class="text-[#58a6ff]/50">
+									{session.work_items.map(w => `#${w}`).join(', ')}
+								</span>
+							{/if}
 						</div>
 					</div>
 

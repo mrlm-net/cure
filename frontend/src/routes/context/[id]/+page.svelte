@@ -15,6 +15,13 @@
 		provider: string;
 		model: string;
 		history: Message[];
+		name?: string;
+		project_name?: string;
+		branch_name?: string;
+		repo_name?: string;
+		work_items?: string[];
+		agent_role?: string;
+		skill_name?: string;
 	}
 
 	interface SSEEvent {
@@ -209,11 +216,33 @@
 				<path d="M15 18l-6-6 6-6" />
 			</svg>
 		</a>
-		<div class="min-w-0">
-			<span class="font-mono text-sm text-[#58a6ff]">{sessionId.slice(0, 8)}</span>
-			{#if session?.model}
-				<span class="ml-2 text-xs text-[rgba(230,237,243,0.4)]">{session.model}</span>
-			{/if}
+		<div class="min-w-0 flex-1">
+			<div class="flex items-center gap-2">
+				<span class="font-mono text-sm text-[#58a6ff]">{session?.name || sessionId.slice(0, 8)}</span>
+				{#if session?.provider}
+					<span class="rounded bg-white/5 px-2 py-0.5 text-xs text-[rgba(230,237,243,0.5)]">{session.provider}</span>
+				{/if}
+				{#if session?.agent_role}
+					<span class="rounded bg-[#58a6ff]/10 px-2 py-0.5 text-xs text-[#58a6ff]/70">{session.agent_role}</span>
+				{/if}
+			</div>
+			<div class="mt-0.5 flex items-center gap-2 text-xs text-[rgba(230,237,243,0.3)]">
+				{#if session?.project_name}
+					<span>{session.project_name}</span>
+				{/if}
+				{#if session?.branch_name}
+					<span class="font-mono">{session.branch_name}</span>
+				{/if}
+				{#if session?.skill_name}
+					<span class="text-[rgba(230,237,243,0.4)]">{session.skill_name}</span>
+				{/if}
+				{#if session?.work_items?.length}
+					<span class="text-[#58a6ff]/50">{session.work_items.map(w => `#${w}`).join(', ')}</span>
+				{/if}
+				{#if session?.model}
+					<span class="text-[rgba(230,237,243,0.25)]">{session.model}</span>
+				{/if}
+			</div>
 		</div>
 	</div>
 

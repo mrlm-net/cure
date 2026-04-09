@@ -7,6 +7,7 @@ import (
 	"context"
 	"flag"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/mrlm-net/cure/pkg/agent"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/doctor"
+	"github.com/mrlm-net/cure/pkg/project"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
@@ -23,18 +25,20 @@ type GUICommand struct {
 	port      int
 	noBrowser bool
 
-	cfgData config.ConfigObject
-	checks  []doctor.CheckFunc
-	store   agent.SessionStore
+	cfgData      config.ConfigObject
+	checks       []doctor.CheckFunc
+	store        agent.SessionStore
+	projectStore project.ProjectStore
 }
 
 // NewGUICommand creates a GUICommand with the given configuration data,
-// doctor checks, and optional session store (nil disables session endpoints).
-func NewGUICommand(cfgData config.ConfigObject, checks []doctor.CheckFunc, store agent.SessionStore) terminal.Command {
+// doctor checks, optional session store, and optional project store.
+func NewGUICommand(cfgData config.ConfigObject, checks []doctor.CheckFunc, store agent.SessionStore, projectStore project.ProjectStore) terminal.Command {
 	return &GUICommand{
-		cfgData: cfgData,
-		checks:  checks,
-		store:   store,
+		cfgData:      cfgData,
+		checks:       checks,
+		store:        store,
+		projectStore: projectStore,
 	}
 }
 
@@ -66,11 +70,24 @@ func (c *GUICommand) Flags() *flag.FlagSet {
 // Run starts the GUI server and blocks until the context is cancelled or
 // SIGINT/SIGTERM is received.
 func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
+	// Detect project from cwd for session association.
+	var projectName string
+	if c.projectStore != nil {
+		det := project.NewDetector(c.projectStore)
+		if cwd, err := os.Getwd(); err == nil {
+			if p, err := det.Detect(cwd); err == nil && p != nil {
+				projectName = p.Name
+			}
+		}
+	}
+
 	deps := api.Deps{
-		Config: c.cfgData,
-		Checks: c.checks,
-		Port:   c.port,
-		Store:  c.store,
+		Config:       c.cfgData,
+		Checks:       c.checks,
+		Port:         c.port,
+		Store:        c.store,
+		ProjectStore: c.projectStore,
+		ProjectName:  projectName,
 	}
 
 	apiRouter := api.NewAPIRouter(deps)

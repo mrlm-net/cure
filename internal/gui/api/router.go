@@ -6,6 +6,7 @@ import (
 	"github.com/mrlm-net/cure/pkg/agent"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/doctor"
+	"github.com/mrlm-net/cure/pkg/project"
 )
 
 // Deps holds the dependencies shared by all API handlers.
@@ -31,6 +32,14 @@ type Deps struct {
 	// and streams results. When nil, the messages endpoint uses a built-in
 	// echo stub that reflects the user's message back as word-level tokens.
 	AgentRun AgentRunFunc
+
+	// ProjectName is the auto-detected project name for the current cwd.
+	// Used to associate new sessions with the project.
+	ProjectName string
+
+	// ProjectStore is the project persistence layer. When nil, project
+	// endpoints return 501 Not Implemented.
+	ProjectStore project.ProjectStore
 }
 
 // NewAPIRouter returns an http.Handler that mounts all /api/* routes.
@@ -54,11 +63,17 @@ func NewAPIRouter(deps Deps) http.Handler {
 		}
 
 		mux.HandleFunc("GET /api/context/sessions", sessionsListHandler(deps.Store))
-		mux.HandleFunc("POST /api/context/sessions", sessionsCreateHandler(deps.Store, defaults))
+		mux.HandleFunc("POST /api/context/sessions", sessionsCreateHandler(deps.Store, defaults, deps.ProjectName))
 		mux.HandleFunc("GET /api/context/sessions/{id}", sessionsGetHandler(deps.Store))
 		mux.HandleFunc("DELETE /api/context/sessions/{id}", sessionsDeleteHandler(deps.Store))
 		mux.HandleFunc("POST /api/context/sessions/{id}/fork", sessionsForkHandler(deps.Store))
 		mux.HandleFunc("POST /api/context/sessions/{id}/messages", messagesHandler(deps.Store, deps.AgentRun))
+	}
+
+	// Project endpoints
+	if deps.ProjectStore != nil {
+		mux.HandleFunc("GET /api/project", projectListHandler(deps.ProjectStore))
+		mux.HandleFunc("GET /api/project/{name}", projectGetHandler(deps.ProjectStore))
 	}
 
 	return mux
