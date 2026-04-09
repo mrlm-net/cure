@@ -24,8 +24,12 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let saving = $state(false);
-	let tab = $state<'sessions' | 'config'>('sessions');
+	let tab = $state<'dashboard' | 'sessions' | 'config'>('dashboard');
 	let dirty = $derived(projectJson !== originalJson);
+
+	const projectData = $derived.by(() => {
+		try { return JSON.parse(projectJson); } catch { return null; }
+	});
 
 	async function fetchData(): Promise<void> {
 		try {
@@ -105,6 +109,13 @@
 		<!-- Tabs -->
 		<div class="flex gap-1 border-b border-[var(--border)]">
 			<button
+				onclick={() => (tab = 'dashboard')}
+				class="px-4 py-2 text-sm font-medium border-b-2 transition-colors
+					{tab === 'dashboard' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+			>
+				Dashboard
+			</button>
+			<button
 				onclick={() => (tab = 'sessions')}
 				class="px-4 py-2 text-sm font-medium border-b-2 transition-colors
 					{tab === 'sessions' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
@@ -119,6 +130,99 @@
 				Configuration {dirty ? '*' : ''}
 			</button>
 		</div>
+
+		<!-- Dashboard tab -->
+		{#if tab === 'dashboard' && projectData}
+			<div class="space-y-4">
+				{#if projectData.description}
+					<p class="text-sm text-[var(--text-secondary)]">{projectData.description}</p>
+				{/if}
+
+				<!-- Stats -->
+				<div class="grid grid-cols-3 gap-4">
+					<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
+						<div class="text-xs font-medium uppercase tracking-wider text-[var(--text-tertiary)]">Repos</div>
+						<div class="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{projectData.repos?.length ?? 0}</div>
+					</div>
+					<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
+						<div class="text-xs font-medium uppercase tracking-wider text-[var(--text-tertiary)]">Sessions</div>
+						<div class="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{sessions.length}</div>
+					</div>
+					<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
+						<div class="text-xs font-medium uppercase tracking-wider text-[var(--text-tertiary)]">Provider</div>
+						<div class="mt-1 text-lg font-semibold text-[var(--text-primary)]">{projectData.defaults?.provider ?? '—'}</div>
+					</div>
+				</div>
+
+				<div class="grid gap-4 lg:grid-cols-2">
+					<!-- Repos -->
+					<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
+						<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Repositories</h3>
+						{#each projectData.repos ?? [] as repo}
+							<div class="rounded-md bg-[var(--bg-tertiary)]/50 px-3 py-2 mb-2 font-mono text-sm text-[var(--text-primary)]">
+								{repo.path}
+								{#if repo.remote}
+									<div class="text-xs text-[var(--text-tertiary)] mt-0.5">{repo.remote}</div>
+								{/if}
+							</div>
+						{/each}
+					</div>
+
+					<!-- Defaults -->
+					<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
+						<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Defaults</h3>
+						<dl class="space-y-2 text-sm">
+							{#if projectData.defaults?.model}
+								<div class="flex justify-between"><dt class="text-[var(--text-secondary)]">Model</dt><dd class="font-mono text-[var(--text-primary)]">{projectData.defaults.model}</dd></div>
+							{/if}
+							{#if projectData.defaults?.max_turns}
+								<div class="flex justify-between"><dt class="text-[var(--text-secondary)]">Max turns</dt><dd class="text-[var(--text-primary)]">{projectData.defaults.max_turns}</dd></div>
+							{/if}
+							{#if projectData.defaults?.tracker}
+								<div class="flex justify-between"><dt class="text-[var(--text-secondary)]">Tracker</dt><dd class="text-[var(--text-primary)]">{projectData.defaults.tracker.type}: {projectData.defaults.tracker.owner}/{projectData.defaults.tracker.repo}</dd></div>
+							{/if}
+						</dl>
+					</div>
+
+					<!-- Workflow -->
+					{#if projectData.workflow}
+						<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
+							<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Workflow</h3>
+							<dl class="space-y-2 text-sm">
+								{#if projectData.workflow.branch_pattern}
+									<div><dt class="text-[var(--text-secondary)]">Branch</dt><dd class="mt-0.5 font-mono text-xs text-[var(--text-primary)]">{projectData.workflow.branch_pattern}</dd></div>
+								{/if}
+								{#if projectData.workflow.commit_pattern}
+									<div><dt class="text-[var(--text-secondary)]">Commit</dt><dd class="mt-0.5 font-mono text-xs text-[var(--text-primary)]">{projectData.workflow.commit_pattern}</dd></div>
+								{/if}
+								{#if projectData.workflow.protected_branches?.length}
+									<div class="flex justify-between"><dt class="text-[var(--text-secondary)]">Protected</dt><dd class="text-[var(--text-primary)]">{projectData.workflow.protected_branches.join(', ')}</dd></div>
+								{/if}
+							</dl>
+						</div>
+					{/if}
+
+					<!-- Notifications -->
+					{#if projectData.notifications}
+						<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
+							<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Notifications</h3>
+							<dl class="space-y-2 text-sm">
+								{#if projectData.notifications.local}
+									<div class="flex justify-between"><dt class="text-[var(--text-secondary)]">Local</dt><dd class="text-[var(--text-primary)]">{projectData.notifications.local.enabled ? 'Enabled' : 'Disabled'}</dd></div>
+								{/if}
+								{#if projectData.notifications.teams}
+									<div class="flex justify-between"><dt class="text-[var(--text-secondary)]">Teams</dt><dd class="text-[var(--text-primary)]">{projectData.notifications.teams.webhook_url ? 'Configured' : 'Not set'}</dd></div>
+								{/if}
+							</dl>
+						</div>
+					{/if}
+				</div>
+
+				<div class="text-xs text-[var(--text-tertiary)]">
+					Created: {new Date(projectData.created_at).toLocaleDateString()} · Updated: {new Date(projectData.updated_at).toLocaleDateString()}
+				</div>
+			</div>
+		{/if}
 
 		<!-- Sessions tab -->
 		{#if tab === 'sessions'}
