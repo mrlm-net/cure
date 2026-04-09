@@ -16,11 +16,14 @@ import (
 	"github.com/mrlm-net/cure/internal/commands/generate"
 	guicmd "github.com/mrlm-net/cure/internal/commands/gui"
 	initcmd "github.com/mrlm-net/cure/internal/commands/init"
+	backlogcmd "github.com/mrlm-net/cure/internal/commands/backlog"
 	mcmcmd "github.com/mrlm-net/cure/internal/commands/mcp"
 	projcmd "github.com/mrlm-net/cure/internal/commands/project"
 	regcmd "github.com/mrlm-net/cure/internal/commands/registry"
 	synccmd "github.com/mrlm-net/cure/internal/commands/sync"
 	"github.com/mrlm-net/cure/internal/commands/trace"
+	vcscmd "github.com/mrlm-net/cure/internal/commands/vcs"
+	ghbacklog "github.com/mrlm-net/cure/internal/backlog/github"
 	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
 	"github.com/mrlm-net/cure/pkg/config"
 	pkgdoctor "github.com/mrlm-net/cure/pkg/doctor"
@@ -79,6 +82,20 @@ func run(args []string) error {
 		reg = registry.New(regDir)
 		router.Register(regcmd.NewRegistryCommand(reg, regDir))
 		router.Register(synccmd.NewSyncCommand(reg))
+	}
+	// Register vcs and backlog commands.
+	router.Register(vcscmd.NewVCSCommand())
+	if projectStore != nil {
+		// Auto-detect tracker from project config for backlog command.
+		det := project.NewDetector(projectStore)
+		if cwd, err := os.Getwd(); err == nil {
+			if p, err := det.Detect(cwd); err == nil && p != nil && p.Defaults.Tracker != nil {
+				if p.Defaults.Tracker.Type == "github" {
+					tracker := &ghbacklog.Tracker{Owner: p.Defaults.Tracker.Owner, Repo: p.Defaults.Tracker.Repo}
+					router.Register(backlogcmd.NewBacklogCommand(tracker))
+				}
+			}
+		}
 	}
 	// Register gui BEFORE completion so it is visible to completion introspection.
 	router.Register(guicmd.NewGUICommand(cfg.Data(), pkgdoctor.BuiltinChecks(), sessionStore, projectStore))
