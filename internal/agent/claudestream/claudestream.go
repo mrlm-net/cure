@@ -1,8 +1,8 @@
 // Package claudestream provides a streaming text adapter for pkg/agent.
-// It invokes the `claude` CLI with --output-format text so that response
-// text is piped character-by-character as it is generated, giving true
-// token streaming without requiring an Anthropic API key (uses Claude
-// subscription auth via the local claude binary).
+// It invokes the `claude` CLI with --output-format text inside a PTY so
+// that Node.js sees process.stdout.isTTY = true and streams response text
+// character-by-character as it is generated rather than buffering the full
+// response before writing.
 //
 // Import with a blank import to register the "claude-stream" provider:
 //
@@ -10,30 +10,35 @@
 //
 // # Streaming model
 //
-// Unlike the claudecode adapter (which uses --output-format stream-json and
-// emits ONE complete assistant message per turn), this adapter uses
-// --output-format text. The claude CLI streams response text to stdout as
-// it is generated, so the reader sees incremental output rather than a
-// single bulk write at the end.
+// When stdout is a plain pipe, Node.js sets process.stdout.isTTY = false
+// and the Claude CLI accumulates the full response before writing.  By
+// spawning the CLI inside a PTY (pseudo-terminal), isTTY = true and the
+// CLI streams each token immediately, giving true progressive output.
+//
+// If PTY creation fails (unsupported platform, permission error), the
+// adapter falls back to pipe-based communication; streaming is then
+// line-granular rather than token-granular.
 //
 // # Trade-offs vs. claudecode adapter
 //
 // This adapter does NOT emit tool-call or tool-result events; it only
-// emits start / token / done / error events. This is acceptable for a
+// emits start / token / done / error events.  This is acceptable for a
 // chat UI that does not require agentic tool use.
 //
 // # Multi-turn sessions
 //
 // History is collapsed into a single Human/Assistant transcript and passed
-// as the -p prompt. --max-turns is fixed at 1 since each GUI request is a
-// single response turn; multi-turn context is provided via the transcript.
+// as the -p prompt.  --max-turns is fixed at 1; multi-turn context is
+// provided via the transcript.
 package claudestream
 
 import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"iter"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -50,7 +55,7 @@ func init() {
 }
 
 // claudeStreamAdapter implements agent.Agent using the claude CLI in text
-// output mode for real streaming.
+// output mode for real streaming via PTY.
 type claudeStreamAdapter struct {
 	claudeBin string
 	model     string
@@ -82,7 +87,10 @@ func (a *claudeStreamAdapter) CountTokens(_ context.Context, _ *agent.Session) (
 }
 
 // Run streams a response for the given session using the claude CLI in text
-// output mode. The caller iterates events with:
+// output mode.  The subprocess is spawned inside a PTY so that Node.js
+// treats stdout as a TTY and streams tokens progressively.
+//
+// The caller iterates events with:
 //
 //	for ev, err := range a.Run(ctx, session) { ... }
 //
@@ -98,62 +106,145 @@ func (a *claudeStreamAdapter) Run(ctx context.Context, sess *agent.Session) iter
 		}
 
 		args := buildArgs(a, sess, prompt)
-		cmd := exec.CommandContext(ctx, a.claudeBin, args...) //nolint:gosec // validated path, not user input
-		stdout, err := cmd.StdoutPipe()
+
+		// Try PTY first — makes Node.js stream tokens progressively.
+		// Fall back to pipe if PTY creation fails (unsupported platform, etc.).
+		master, slaveName, ptyErr := openPTY()
+		if ptyErr != nil {
+			a.streamViaPipe(ctx, args, yield)
+			return
+		}
+
+		slave, err := os.OpenFile(slaveName, os.O_RDWR, 0)
 		if err != nil {
-			msg := fmt.Sprintf("claude-stream: stdout pipe: %v", err)
-			yield(agent.Event{Kind: agent.EventKindError, Err: msg},
-				fmt.Errorf("%s", msg)) //nolint:goerr113
+			master.Close()
+			a.streamViaPipe(ctx, args, yield)
 			return
 		}
 
-		if err := cmd.Start(); err != nil {
-			msg := fmt.Sprintf("claude-stream: start subprocess: %v", err)
-			yield(agent.Event{Kind: agent.EventKindError, Err: msg},
-				fmt.Errorf("%s", msg)) //nolint:goerr113
-			return
-		}
-
-		// Emit start before any text arrives.
-		if !yield(agent.Event{Kind: agent.EventKindStart}, nil) {
-			return
-		}
-
-		// Stream text line-by-line.  ScanLines strips the newline; we restore it
-		// so the UI can render paragraphs correctly.  The last line (which may
-		// not have a trailing newline) is still emitted without modification.
-		scanner := bufio.NewScanner(stdout)
-		const maxScanBuf = 4 * 1024 * 1024 // 4 MiB — matches claudecode adapter
-		scanner.Buffer(make([]byte, maxScanBuf), maxScanBuf)
-
-		lineNum := 0
-		for scanner.Scan() {
-			if ctx.Err() != nil {
-				break
-			}
-			line := scanner.Text()
-			// Prepend \n for every line after the first so that multi-line
-			// responses are reconstructed correctly from individual token events.
-			text := line
-			if lineNum > 0 {
-				text = "\n" + line
-			}
-			lineNum++
-			if !yield(agent.Event{Kind: agent.EventKindToken, Text: text}, nil) {
-				return
-			}
-		}
-
-		// Wait for the process to exit; report errors only when context is live.
-		if err := cmd.Wait(); err != nil && ctx.Err() == nil {
-			msg := fmt.Sprintf("claude-stream: subprocess exited with error: %v", err)
-			yield(agent.Event{Kind: agent.EventKindError, Err: msg},
-				fmt.Errorf("%s", msg)) //nolint:goerr113
-			return
-		}
-
-		yield(agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"}, nil)
+		a.streamViaPTY(ctx, args, master, slave, yield)
 	}
+}
+
+// streamViaPTY runs the CLI subprocess with a PTY for real token streaming.
+// slave is the PTY slave device; master is the read side (parent).
+func (a *claudeStreamAdapter) streamViaPTY(
+	ctx context.Context,
+	args []string,
+	master, slave *os.File,
+	yield func(agent.Event, error) bool,
+) {
+	defer master.Close()
+
+	cmd := exec.CommandContext(ctx, a.claudeBin, args...) //nolint:gosec
+	cmd.Stdin = slave
+	cmd.Stdout = slave
+	cmd.Stderr = slave
+	// ptyProcAttr sets Setsid + Setctty so the slave PTY becomes the child's
+	// controlling terminal, making Node.js see process.stdout.isTTY = true.
+	cmd.SysProcAttr = ptyProcAttr()
+
+	if err := cmd.Start(); err != nil {
+		slave.Close()
+		msg := fmt.Sprintf("claude-stream: start subprocess: %v", err)
+		yield(agent.Event{Kind: agent.EventKindError, Err: msg},
+			fmt.Errorf("%s", msg)) //nolint:goerr113
+		return
+	}
+	// Parent must close its slave reference after the child is forked;
+	// otherwise the master will never see EOF when the child exits.
+	slave.Close()
+
+	if !yield(agent.Event{Kind: agent.EventKindStart}, nil) {
+		cmd.Cancel()
+		return
+	}
+
+	a.drainReader(ctx, master, yield)
+
+	// Collect exit status; EIO from the master is expected when slave closes.
+	if err := cmd.Wait(); err != nil && ctx.Err() == nil {
+		msg := fmt.Sprintf("claude-stream: subprocess exited with error: %v", err)
+		yield(agent.Event{Kind: agent.EventKindError, Err: msg},
+			fmt.Errorf("%s", msg)) //nolint:goerr113
+		return
+	}
+
+	yield(agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"}, nil)
+}
+
+// streamViaPipe runs the CLI with a plain stdout pipe.  Node.js will buffer
+// output (isTTY = false) so tokens arrive in bulk; this is the fallback
+// when PTY creation is not available.
+func (a *claudeStreamAdapter) streamViaPipe(
+	ctx context.Context,
+	args []string,
+	yield func(agent.Event, error) bool,
+) {
+	cmd := exec.CommandContext(ctx, a.claudeBin, args...) //nolint:gosec
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		msg := fmt.Sprintf("claude-stream: stdout pipe: %v", err)
+		yield(agent.Event{Kind: agent.EventKindError, Err: msg},
+			fmt.Errorf("%s", msg)) //nolint:goerr113
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		msg := fmt.Sprintf("claude-stream: start subprocess: %v", err)
+		yield(agent.Event{Kind: agent.EventKindError, Err: msg},
+			fmt.Errorf("%s", msg)) //nolint:goerr113
+		return
+	}
+
+	if !yield(agent.Event{Kind: agent.EventKindStart}, nil) {
+		return
+	}
+
+	a.drainReader(ctx, stdout, yield)
+
+	if err := cmd.Wait(); err != nil && ctx.Err() == nil {
+		msg := fmt.Sprintf("claude-stream: subprocess exited with error: %v", err)
+		yield(agent.Event{Kind: agent.EventKindError, Err: msg},
+			fmt.Errorf("%s", msg)) //nolint:goerr113
+		return
+	}
+
+	yield(agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"}, nil)
+}
+
+// drainReader reads text from r line-by-line and yields each non-empty
+// line as an EventKindToken.  ANSI escape sequences are stripped so the
+// chat UI receives clean text even when the CLI emits colour codes.
+//
+// ScanLines handles both \n and \r\n (PTY cooked mode) correctly.
+func (a *claudeStreamAdapter) drainReader(
+	ctx context.Context,
+	r io.Reader,
+	yield func(agent.Event, error) bool,
+) {
+	const maxBuf = 4 * 1024 * 1024 // 4 MiB — matches claudecode adapter
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, maxBuf), maxBuf)
+
+	lineNum := 0
+	for scanner.Scan() {
+		if ctx.Err() != nil {
+			return
+		}
+		line := stripANSI(scanner.Text())
+		// Prepend \n for every line after the first to preserve paragraph
+		// structure when tokens are concatenated in the chat UI.
+		text := line
+		if lineNum > 0 {
+			text = "\n" + line
+		}
+		lineNum++
+		if !yield(agent.Event{Kind: agent.EventKindToken, Text: text}, nil) {
+			return
+		}
+	}
+	// scanner.Err() is nil for clean EOF and EIO (PTY slave closed = normal).
 }
 
 // buildArgs constructs the CLI argument list.
@@ -202,7 +293,35 @@ func buildPrompt(sess *agent.Session) string {
 			b.WriteString("Assistant: ")
 			b.WriteString(text)
 		case agent.RoleSystem:
-			// System messages handled via --system-prompt; skip from transcript.
+			// Handled via --system-prompt; skip from transcript.
+		}
+	}
+	return b.String()
+}
+
+// stripANSI removes ANSI escape sequences (ESC [ ... letter) from text.
+// This is needed when the CLI is run inside a PTY and emits colour codes
+// or cursor movement sequences.  The fast path skips strings with no ESC.
+func stripANSI(s string) string {
+	if !strings.ContainsRune(s, '\x1b') {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	i := 0
+	for i < len(s) {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			// Skip ESC [ <params> <letter>
+			i += 2
+			for i < len(s) && (s[i] >= '0' && s[i] <= '9' || s[i] == ';') {
+				i++
+			}
+			if i < len(s) {
+				i++ // skip terminating letter
+			}
+		} else {
+			b.WriteByte(s[i])
+			i++
 		}
 	}
 	return b.String()
