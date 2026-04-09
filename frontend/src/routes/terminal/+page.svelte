@@ -135,5 +135,5 @@
 		</div>
 	{/if}
 
-	<div bind:this={termContainer} class="flex-1" style="display: {loading ? 'none' : 'block'}"></div>
+	<div bind:this={termContainer} class="flex-1 p-3" style="display: {loading ? 'none' : 'block'}"></div>
 </div>
