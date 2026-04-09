@@ -20,6 +20,16 @@ type Session struct {
 	Tags         []string  `json:"tags,omitempty"`
 	SkillName    string    `json:"skill_name,omitempty"`
 	Tools        []Tool    `json:"-"` // transient — not persisted to disk
+
+	// Enrichment fields (v1.0.0) — all optional, backward compatible.
+	Name        string   `json:"name,omitempty"`          // human-readable session name
+	ProjectName string   `json:"project_name,omitempty"`  // associated project
+	BranchName  string   `json:"branch_name,omitempty"`   // git branch at session start
+	RepoName    string   `json:"repo_name,omitempty"`     // repository name/path
+	GitDirty    bool     `json:"git_dirty,omitempty"`     // working tree had uncommitted changes
+	WorkItems   []string `json:"work_items,omitempty"`    // linked issue/ticket IDs
+	AgentRole   string   `json:"agent_role,omitempty"`    // e.g., "build", "review", "test"
+	ContainerID string   `json:"container_id,omitempty"` // Docker container ID if orchestrated
 }
 
 // NewSession creates a new Session for the given provider and model.
@@ -57,6 +67,12 @@ func (s *Session) Fork() *Session {
 		copy(tools, s.Tools)
 	}
 
+	var workItems []string
+	if len(s.WorkItems) > 0 {
+		workItems = make([]string, len(s.WorkItems))
+		copy(workItems, s.WorkItems)
+	}
+
 	return &Session{
 		ID:           newSessionID(),
 		Provider:     s.Provider,
@@ -69,6 +85,14 @@ func (s *Session) Fork() *Session {
 		Tags:         tags,
 		SkillName:    s.SkillName,
 		Tools:        tools,
+		Name:         s.Name,
+		ProjectName:  s.ProjectName,
+		BranchName:   s.BranchName,
+		RepoName:     s.RepoName,
+		GitDirty:     s.GitDirty,
+		WorkItems:    workItems,
+		AgentRole:    s.AgentRole,
+		ContainerID:  "", // forked sessions are not in the same container
 	}
 }
 
@@ -108,6 +132,20 @@ func (s *Session) AppendToolResult(id, toolName, result string, isError bool) {
 		}},
 	})
 	s.UpdatedAt = time.Now().UTC()
+}
+
+// DefaultName generates a human-readable session name from provider and ID.
+// Format: "<provider>-<first 4 chars of ID>". Returns just the ID prefix if
+// provider is empty.
+func DefaultName(provider, id string) string {
+	prefix := id
+	if len(prefix) > 4 {
+		prefix = prefix[:4]
+	}
+	if provider == "" {
+		return prefix
+	}
+	return provider + "-" + prefix
 }
 
 // newSessionID generates a 32-character hex-encoded session ID using crypto/rand.
