@@ -73,8 +73,8 @@
 		</div>
 	</div>
 {:else}
-	<!-- Assistant: full-width prose -->
-	<div class="prose">
+	<!-- Assistant: full-width prose in subtle bubble -->
+	<div class="prose rounded-lg bg-[var(--bg-secondary)] px-5 py-4">
 		{@html renderedContent}
 		{#if streaming}
 			<span class="ml-1 inline-block w-1.5 h-4 bg-[var(--accent)] animate-pulse align-middle"></span>
