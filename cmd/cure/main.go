@@ -18,6 +18,7 @@ import (
 	initcmd "github.com/mrlm-net/cure/internal/commands/init"
 	backlogcmd "github.com/mrlm-net/cure/internal/commands/backlog"
 	mcmcmd "github.com/mrlm-net/cure/internal/commands/mcp"
+	orchcmd "github.com/mrlm-net/cure/internal/commands/orchestrate"
 	projcmd "github.com/mrlm-net/cure/internal/commands/project"
 	regcmd "github.com/mrlm-net/cure/internal/commands/registry"
 	synccmd "github.com/mrlm-net/cure/internal/commands/sync"
@@ -82,6 +83,10 @@ func run(args []string) error {
 		reg = registry.New(regDir)
 		router.Register(regcmd.NewRegistryCommand(reg, regDir))
 		router.Register(synccmd.NewSyncCommand(reg))
+	}
+	// Register orchestrate command.
+	if projectStore != nil {
+		router.Register(orchcmd.NewOrchestrateCommand(projectStore))
 	}
 	// Register vcs and backlog commands.
 	router.Register(vcscmd.NewVCSCommand())
