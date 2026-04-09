@@ -295,7 +295,7 @@
 					</p>
 				</div>
 			{:else}
-				<div class="mx-auto max-w-3xl space-y-4">
+				<div class="space-y-4 px-2">
 					{#each displayMessages as msg, i}
 						{@const isStreamingMsg = streaming && i === displayMessages.length - 1 && msg.role === 'assistant'}
 						<ChatBubble
@@ -309,7 +309,7 @@
 
 			<!-- Thinking / tool-use indicator -->
 			{#if streamLoading || activeTool}
-				<div class="mx-auto mt-4 flex max-w-3xl items-center gap-2">
+				<div class="mt-4 flex items-center gap-2">
 					<LoadingSpinner size="sm" />
 					{#if activeTool}
 						<span class="font-mono text-xs text-[var(--text-secondary)]">{activeTool}</span>
@@ -321,7 +321,7 @@
 
 			<!-- Inline error during streaming -->
 			{#if error && messages.length > 0}
-				<div class="mx-auto mt-4 max-w-3xl">
+				<div class="mt-4">
 					<ErrorBanner message={error} onDismiss={() => (error = null)} />
 				</div>
 			{/if}
@@ -335,7 +335,7 @@
 	>
 		<form
 			onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}
-			class="mx-auto flex max-w-3xl items-end gap-3"
+			class="flex items-end gap-3"
 		>
 			<textarea
 				bind:this={textarea}
