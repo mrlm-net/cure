@@ -18,11 +18,14 @@ import (
 	initcmd "github.com/mrlm-net/cure/internal/commands/init"
 	mcmcmd "github.com/mrlm-net/cure/internal/commands/mcp"
 	projcmd "github.com/mrlm-net/cure/internal/commands/project"
+	regcmd "github.com/mrlm-net/cure/internal/commands/registry"
+	synccmd "github.com/mrlm-net/cure/internal/commands/sync"
 	"github.com/mrlm-net/cure/internal/commands/trace"
 	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
 	"github.com/mrlm-net/cure/pkg/config"
 	pkgdoctor "github.com/mrlm-net/cure/pkg/doctor"
 	"github.com/mrlm-net/cure/pkg/project"
+	"github.com/mrlm-net/cure/pkg/registry"
 	"github.com/mrlm-net/cure/pkg/template"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
@@ -69,6 +72,13 @@ func run(args []string) error {
 	// Register project command BEFORE completion.
 	if projectStore != nil {
 		router.Register(projcmd.NewProjectCommand(projectStore))
+	}
+	// Initialise registry for AI config distribution.
+	var reg *registry.Registry
+	if regDir, err := registry.DefaultBaseDir(); err == nil {
+		reg = registry.New(regDir)
+		router.Register(regcmd.NewRegistryCommand(reg, regDir))
+		router.Register(synccmd.NewSyncCommand(reg))
 	}
 	// Register gui BEFORE completion so it is visible to completion introspection.
 	router.Register(guicmd.NewGUICommand(cfg.Data(), pkgdoctor.BuiltinChecks(), sessionStore, projectStore))
