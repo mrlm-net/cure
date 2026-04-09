@@ -3,6 +3,8 @@
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
+	import { initTheme } from '$lib/theme';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	interface Props {
 		children: Snippet;
@@ -25,6 +27,10 @@
 
 	afterNavigate(() => {
 		mobileNavOpen = false;
+	});
+
+	$effect(() => {
+		initTheme();
 	});
 
 	interface NavItem {
@@ -52,6 +58,16 @@
 	];
 
 	const toolsNav: NavItem[] = [
+		{
+			href: '/editor',
+			label: 'Editor',
+			icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
+		},
+		{
+			href: '/terminal',
+			label: 'Terminal',
+			icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
+		},
 		{
 			href: '/generate',
 			label: 'Generate',
@@ -86,7 +102,7 @@
 			class="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors
 				{active
 					? 'bg-[rgba(88,166,255,0.15)] text-[#58a6ff]'
-					: 'text-[rgba(230,237,243,0.5)] hover:bg-white/5 hover:text-[#e6edf3]'}"
+					: 'text-[rgba(230,237,243,0.5)] hover:bg-white/5 hover:text-[var(--text-primary)]'}"
 			aria-current={active ? 'page' : undefined}
 		>
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -99,16 +115,16 @@
 
 <a
 	href="#main-content"
-	class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-[#161b22] focus:px-4 focus:py-2 focus:text-[#58a6ff]"
+	class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-[var(--bg-secondary)] focus:px-4 focus:py-2 focus:text-[#58a6ff]"
 >
 	Skip to content
 </a>
 
 <!-- Mobile top bar -->
-<div class="fixed top-0 left-0 right-0 z-30 flex items-center border-b border-white/10 bg-[#161b22] px-4 py-3 md:hidden">
+<div class="fixed top-0 left-0 right-0 z-30 flex items-center border-b border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3 md:hidden">
 	<button
 		onclick={() => (mobileNavOpen = !mobileNavOpen)}
-		class="rounded p-1 text-[#e6edf3] hover:bg-white/10"
+		class="rounded p-1 text-[var(--text-primary)] hover:bg-white/10"
 		aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
 		aria-expanded={mobileNavOpen}
 	>
@@ -120,7 +136,7 @@
 			{/if}
 		</svg>
 	</button>
-	<span class="ml-3 text-sm font-semibold tracking-wide text-white/80">cure</span>
+	<span class="ml-3 text-sm font-semibold tracking-wide text-[var(--text-primary)]">cure</span>
 </div>
 
 <!-- Mobile backdrop -->
@@ -135,13 +151,13 @@
 
 <!-- Sidebar -->
 <aside
-	class="fixed top-0 left-0 z-40 flex h-full w-56 flex-col bg-[#161b22] transition-transform duration-200 ease-in-out
+	class="fixed top-0 left-0 z-40 flex h-full w-56 flex-col bg-[var(--bg-secondary)] transition-transform duration-200 ease-in-out
 		{mobileNavOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0"
 	aria-hidden={!isDesktop && !mobileNavOpen ? 'true' : undefined}
 >
 	<!-- Branding -->
-	<div class="flex h-14 items-center border-b border-white/10 px-5">
-		<span class="text-sm font-semibold tracking-wide text-white/80">cure</span>
+	<div class="flex h-14 items-center border-b border-[var(--border)] px-5">
+		<span class="text-sm font-semibold tracking-wide text-[var(--text-primary)]">cure</span>
 	</div>
 
 	<!-- Main navigation -->
@@ -164,7 +180,7 @@
 	</nav>
 
 	<!-- Bottom: Config (separated) -->
-	<div class="border-t border-white/10 px-3 py-3">
+	<div class="border-t border-[var(--border)] px-3 py-3">
 		<ul class="space-y-1">
 			{#each bottomNav as item}
 				{@render navLink(item)}
@@ -173,8 +189,9 @@
 	</div>
 
 	<!-- Version footer -->
-	<div class="border-t border-white/10 px-5 py-3">
-		<span class="text-xs text-[rgba(230,237,243,0.3)]">cure GUI</span>
+	<div class="flex items-center justify-between border-t border-[var(--border)] px-5 py-3">
+		<span class="text-xs text-[var(--text-tertiary)]">cure GUI</span>
+		<ThemeToggle />
 	</div>
 </aside>
 

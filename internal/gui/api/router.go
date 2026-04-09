@@ -40,6 +40,9 @@ type Deps struct {
 	// ProjectStore is the project persistence layer. When nil, project
 	// endpoints return 501 Not Implemented.
 	ProjectStore project.ProjectStore
+
+	// ProjectRoots are the allowed file API root directories (from project repos).
+	ProjectRoots []string
 }
 
 // NewAPIRouter returns an http.Handler that mounts all /api/* routes.
@@ -75,6 +78,11 @@ func NewAPIRouter(deps Deps) http.Handler {
 		mux.HandleFunc("GET /api/project", projectListHandler(deps.ProjectStore))
 		mux.HandleFunc("GET /api/project/{name}", projectGetHandler(deps.ProjectStore))
 	}
+
+	// File API (scoped to project roots)
+	mux.HandleFunc("GET /api/files", filesListHandler(deps.ProjectRoots))
+	mux.HandleFunc("GET /api/files/{path...}", fileReadHandler(deps.ProjectRoots))
+	mux.HandleFunc("PUT /api/files/{path...}", fileWriteHandler(deps.ProjectRoots))
 
 	return mux
 }

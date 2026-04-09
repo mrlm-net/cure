@@ -81,6 +81,21 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 		}
 	}
 
+	// Collect project repo paths for file API scoping.
+	var projectRoots []string
+	if c.projectStore != nil && projectName != "" {
+		if p, err := c.projectStore.Load(projectName); err == nil {
+			for _, r := range p.Repos {
+				projectRoots = append(projectRoots, r.Path)
+			}
+		}
+	}
+	if len(projectRoots) == 0 {
+		if cwd, err := os.Getwd(); err == nil {
+			projectRoots = []string{cwd}
+		}
+	}
+
 	deps := api.Deps{
 		Config:       c.cfgData,
 		Checks:       c.checks,
@@ -88,6 +103,7 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 		Store:        c.store,
 		ProjectStore: c.projectStore,
 		ProjectName:  projectName,
+		ProjectRoots: projectRoots,
 	}
 
 	apiRouter := api.NewAPIRouter(deps)
