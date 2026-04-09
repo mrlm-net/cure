@@ -114,7 +114,7 @@
 
 <div class="-m-6 flex h-[calc(100vh-3.5rem)] flex-col md:h-screen">
 	<!-- Header -->
-	<div class="flex h-9 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-secondary)] px-4">
+	<div class="flex h-11 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-secondary)] px-4">
 		<span class="text-xs text-[var(--text-secondary)]">Terminal</span>
 		{#if connected}
 			<span class="h-2 w-2 rounded-full bg-[var(--success)]"></span>
