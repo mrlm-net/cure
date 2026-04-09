@@ -169,7 +169,7 @@
 		</ul>
 
 		<!-- Tools section -->
-		<div class="mt-6 mb-2 px-3">
+		<div class="mt-4 mb-2 border-t border-[var(--border)] pt-4 px-3">
 			<span class="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-tertiary)]">Tools</span>
 		</div>
 		<ul class="space-y-1">
