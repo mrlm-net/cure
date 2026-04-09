@@ -89,6 +89,26 @@ func (m *memStore) Fork(ctx context.Context, id string) (*agent.Session, error) 
 	return forked, nil
 }
 
+func (m *memStore) Search(ctx context.Context, filter agent.SessionFilter) ([]*agent.Session, error) {
+	all, err := m.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var results []*agent.Session
+	for _, s := range all {
+		if filter.MatchSession(s) {
+			results = append(results, s)
+			if filter.Limit > 0 && len(results) >= filter.Limit {
+				break
+			}
+		}
+	}
+	if results == nil {
+		results = []*agent.Session{}
+	}
+	return results, nil
+}
+
 // sessionsDeps builds a Deps with the given store for session endpoint testing.
 func sessionsDeps(store agent.SessionStore) Deps {
 	return Deps{
