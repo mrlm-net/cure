@@ -17,6 +17,7 @@ import (
 	guicmd "github.com/mrlm-net/cure/internal/commands/gui"
 	initcmd "github.com/mrlm-net/cure/internal/commands/init"
 	mcmcmd "github.com/mrlm-net/cure/internal/commands/mcp"
+	projcmd "github.com/mrlm-net/cure/internal/commands/project"
 	"github.com/mrlm-net/cure/internal/commands/trace"
 	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
 	"github.com/mrlm-net/cure/pkg/config"
@@ -60,12 +61,16 @@ func run(args []string) error {
 	router.Register(initcmd.NewInitCommand())
 	// Register mcp BEFORE completion so it is visible to completion introspection.
 	router.Register(mcmcmd.NewMCPCommand())
-	// Register gui BEFORE completion so it is visible to completion introspection.
 	// Initialise project store for project detection and GUI.
 	var projectStore *project.Store
 	if baseDir, err := project.DefaultBaseDir(); err == nil {
 		projectStore = project.NewStore(baseDir)
 	}
+	// Register project command BEFORE completion.
+	if projectStore != nil {
+		router.Register(projcmd.NewProjectCommand(projectStore))
+	}
+	// Register gui BEFORE completion so it is visible to completion introspection.
 	router.Register(guicmd.NewGUICommand(cfg.Data(), pkgdoctor.BuiltinChecks(), sessionStore, projectStore))
 	router.Register(completion.NewCompletionCommand(router))
 	return router.RunArgs(args)
