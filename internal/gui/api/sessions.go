@@ -33,9 +33,11 @@ func sessionsListHandler(store agent.SessionStore) http.HandlerFunc {
 func sessionsCreateHandler(store agent.SessionStore, cfg configDefaults) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateSessionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
-			return
+		if r.Body != nil && r.ContentLength != 0 {
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeError(w, http.StatusBadRequest, "invalid request body")
+				return
+			}
 		}
 
 		provider := req.Provider

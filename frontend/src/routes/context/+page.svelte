@@ -10,7 +10,7 @@
 		provider: string;
 		model: string;
 		updated_at: string;
-		turn_count: number;
+		turns: number;
 	}
 
 	let sessions = $state<Session[]>([]);
@@ -20,8 +20,7 @@
 
 	async function fetchSessions(): Promise<void> {
 		try {
-			const data = await apiFetch<{ sessions: Session[] }>('/api/context/sessions');
-			sessions = data.sessions ?? [];
+			sessions = await apiFetch<Session[]>('/api/context/sessions');
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load sessions';
 		} finally {
@@ -34,8 +33,12 @@
 		mutating = true;
 		error = null;
 		try {
-			await apiFetch<{ id: string }>('/api/context/sessions', { method: 'POST' });
-			await fetchSessions();
+			const created = await apiFetch<{ id: string }>('/api/context/sessions', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: '{}',
+			});
+			goto(`/context/${created.id}`);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to create session';
 		} finally {
@@ -156,7 +159,7 @@
 						</div>
 						<div class="mt-1 flex items-center gap-3 text-xs text-[rgba(230,237,243,0.3)]">
 							<span>{formatRelativeTime(session.updated_at)}</span>
-							<span>{session.turn_count} turn{session.turn_count !== 1 ? 's' : ''}</span>
+							<span>{session.turns} turn{session.turns !== 1 ? 's' : ''}</span>
 						</div>
 					</div>
 

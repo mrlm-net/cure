@@ -136,8 +136,11 @@
 					try {
 						const event: SSEEvent = JSON.parse(line.slice(6));
 						if (event.kind === 'start') {
-							streamLoading = false;
+							// Keep streamLoading = true until the first token arrives.
+							// The gap between 'start' and the first token is the model
+							// generation time — the "Thinking..." indicator covers it.
 						} else if (event.kind === 'token') {
+							streamLoading = false; // first token clears thinking indicator
 							streamBuffer += event.text ?? '';
 							scrollToBottom();
 						} else if (event.kind === 'done') {
