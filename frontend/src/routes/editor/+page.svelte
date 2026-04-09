@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { apiFetch, getBaseUrl } from '$lib/api';
 	import ErrorBanner from '$lib/components/ErrorBanner.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { getTheme } from '$lib/theme';
 
 	interface FileEntry {
 		name: string;
@@ -11,72 +9,74 @@
 		size: number;
 	}
 
-	let editorContainer: HTMLDivElement | undefined = $state();
-	let editor: any = $state(null);
-	let monacoModule: any = $state(null);
 	let currentPath = $state('');
 	let currentFile = $state('');
+	let fileContent = $state('');
+	let originalContent = $state('');
 	let files = $state<FileEntry[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let saving = $state(false);
 
+	const dirty = $derived(fileContent !== originalContent && currentFile !== '');
+
 	async function fetchFiles(path: string): Promise<void> {
 		try {
-			const data = await apiFetch<FileEntry[]>(`/api/files?path=${encodeURIComponent(path)}`);
-			files = data;
-			currentPath = path;
+			const url = path && path !== '.' ? `/api/files?path=${encodeURIComponent(path)}` : '/api/files';
+			files = await apiFetch<FileEntry[]>(url);
+			currentPath = path || '.';
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load files';
+		} finally {
+			loading = false;
 		}
 	}
 
-	async function openFile(path: string): Promise<void> {
+	async function openFile(name: string): Promise<void> {
+		const path = currentPath && currentPath !== '.' ? `${currentPath}/${name}` : name;
 		try {
 			const base = getBaseUrl();
-			const res = await fetch(`${base}/api/files/${encodeURIComponent(path)}`);
-			if (!res.ok) throw new Error(`Failed to load file: ${res.status}`);
+			const res = await fetch(`${base}/api/files/${path}`);
+			if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
 			const content = await res.text();
 			currentFile = path;
-
-			if (editor && monacoModule) {
-				const ext = path.split('.').pop() || '';
-				const lang = extToLanguage(ext);
-				const model = monacoModule.editor.createModel(content, lang);
-				editor.setModel(model);
-			}
+			fileContent = content;
+			originalContent = content;
+			error = null;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to open file';
 		}
 	}
 
+	async function openDir(name: string): Promise<void> {
+		const path = currentPath && currentPath !== '.' ? `${currentPath}/${name}` : name;
+		await fetchFiles(path);
+	}
+
+	async function goUp(): Promise<void> {
+		if (!currentPath || currentPath === '.') return;
+		const parts = currentPath.split('/');
+		parts.pop();
+		await fetchFiles(parts.join('/') || '.');
+	}
+
 	async function saveFile(): Promise<void> {
-		if (!editor || !currentFile) return;
+		if (!currentFile || !dirty) return;
 		saving = true;
 		try {
-			const content = editor.getValue();
 			const base = getBaseUrl();
-			const res = await fetch(`${base}/api/files/${encodeURIComponent(currentFile)}`, {
+			const res = await fetch(`${base}/api/files/${currentFile}`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'text/plain' },
-				body: content
+				body: fileContent
 			});
 			if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+			originalContent = fileContent;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to save';
 		} finally {
 			saving = false;
 		}
-	}
-
-	function extToLanguage(ext: string): string {
-		const map: Record<string, string> = {
-			go: 'go', ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-			py: 'python', rs: 'rust', java: 'java', json: 'json', yaml: 'yaml', yml: 'yaml',
-			md: 'markdown', html: 'html', css: 'css', svelte: 'html', sh: 'shell',
-			toml: 'ini', sql: 'sql', xml: 'xml', dockerfile: 'dockerfile'
-		};
-		return map[ext.toLowerCase()] || 'plaintext';
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -86,32 +86,8 @@
 		}
 	}
 
-	onMount(async () => {
-		loading = true;
-		try {
-			const monaco = await import('monaco-editor');
-			monacoModule = monaco;
-
-			if (editorContainer) {
-				const theme = getTheme();
-				editor = monaco.editor.create(editorContainer, {
-					value: '// Open a file from the sidebar',
-					language: 'plaintext',
-					theme: theme === 'dark' ? 'vs-dark' : 'vs',
-					minimap: { enabled: false },
-					fontSize: 13,
-					lineNumbers: 'on',
-					renderWhitespace: 'selection',
-					tabSize: 4,
-					automaticLayout: true,
-				});
-			}
-			await fetchFiles('.');
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to load editor';
-		} finally {
-			loading = false;
-		}
+	$effect(() => {
+		fetchFiles('.');
 	});
 </script>
 
@@ -122,32 +98,27 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="-m-6 flex h-[calc(100vh-3.5rem)] md:h-screen">
-	<!-- File browser sidebar -->
+	<!-- File browser -->
 	<div class="w-56 shrink-0 overflow-y-auto border-r border-[var(--border)] bg-[var(--bg-secondary)] p-2">
-		<div class="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-			Files
-		</div>
+		<div class="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Files</div>
 		{#if currentPath && currentPath !== '.'}
-			<button
-				onclick={() => fetchFiles(currentPath.split('/').slice(0, -1).join('/') || '.')}
-				class="mb-1 flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
-			>
+			<button onclick={goUp} class="mb-1 flex w-full items-center gap-1 rounded px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]">
 				..
 			</button>
 		{/if}
 		{#each files as f}
 			{#if f.is_dir}
 				<button
-					onclick={() => fetchFiles(currentPath === '.' ? f.name : `${currentPath}/${f.name}`)}
-					class="flex w-full items-center gap-2 rounded px-2 py-1 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
+					onclick={() => openDir(f.name)}
+					class="flex w-full items-center gap-1 rounded px-2 py-1 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
 				>
 					<span class="text-[var(--accent)]">+</span> {f.name}
 				</button>
 			{:else}
 				<button
-					onclick={() => openFile(currentPath === '.' ? f.name : `${currentPath}/${f.name}`)}
-					class="flex w-full items-center gap-2 rounded px-2 py-1 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]
-						{currentFile.endsWith(f.name) ? 'bg-[var(--accent-subtle)]' : ''}"
+					onclick={() => openFile(f.name)}
+					class="flex w-full items-center rounded px-2 py-1 text-sm hover:bg-[var(--bg-tertiary)]
+						{currentFile.endsWith('/' + f.name) || currentFile === f.name ? 'bg-[var(--accent-subtle)] text-[var(--accent)]' : 'text-[var(--text-primary)]'}"
 				>
 					{f.name}
 				</button>
@@ -155,32 +126,45 @@
 		{/each}
 	</div>
 
-	<!-- Editor -->
+	<!-- Editor area -->
 	<div class="flex flex-1 flex-col">
 		<!-- Tab bar -->
-		<div class="flex h-9 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-secondary)] px-3">
-			{#if currentFile}
-				<span class="text-xs text-[var(--text-secondary)]">{currentFile}</span>
-				{#if saving}
-					<span class="text-xs text-[var(--warning)]">Saving...</span>
+		<div class="flex h-9 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-secondary)] px-3">
+			<div class="flex items-center gap-2">
+				{#if currentFile}
+					<span class="text-xs text-[var(--text-secondary)]">{currentFile}</span>
+					{#if dirty}
+						<span class="text-xs text-[var(--warning)]">(modified)</span>
+					{/if}
+					{#if saving}
+						<span class="text-xs text-[var(--accent)]">Saving...</span>
+					{/if}
+				{:else}
+					<span class="text-xs text-[var(--text-tertiary)]">Select a file</span>
 				{/if}
-			{:else}
-				<span class="text-xs text-[var(--text-tertiary)]">No file open</span>
+			</div>
+			{#if dirty}
+				<button onclick={saveFile} class="rounded bg-[var(--accent)] px-2 py-0.5 text-xs text-white">Save</button>
 			{/if}
 		</div>
 
 		{#if error}
-			<div class="p-4">
-				<ErrorBanner message={error} onDismiss={() => (error = null)} />
-			</div>
+			<div class="p-4"><ErrorBanner message={error} onDismiss={() => (error = null)} /></div>
 		{/if}
 
 		{#if loading}
-			<div class="flex flex-1 items-center justify-center">
-				<LoadingSpinner />
-			</div>
+			<div class="flex flex-1 items-center justify-center"><LoadingSpinner /></div>
+		{:else if currentFile}
+			<textarea
+				bind:value={fileContent}
+				class="flex-1 w-full resize-none border-0 bg-[var(--bg-primary)] p-4 font-mono text-sm leading-6 text-[var(--text-primary)] focus:outline-none"
+				spellcheck="false"
+				wrap="off"
+			></textarea>
 		{:else}
-			<div bind:this={editorContainer} class="flex-1"></div>
+			<div class="flex flex-1 items-center justify-center text-sm text-[var(--text-tertiary)]">
+				Select a file from the sidebar to edit
+			</div>
 		{/if}
 	</div>
 </div>

@@ -195,11 +195,11 @@
 <div class="-m-6 flex h-[calc(100vh-3.5rem)] flex-col md:h-screen">
 	<!-- Header -->
 	<div
-		class="flex items-center gap-3 border-b border-white/10 bg-[#0d1117] px-4 py-3 md:px-6"
+		class="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 md:px-6"
 	>
 		<a
 			href="/context"
-			class="rounded-md p-1 text-[rgba(230,237,243,0.5)] transition-colors hover:bg-white/5 hover:text-[#e6edf3]"
+			class="rounded-md p-1 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-tertiary)]/50 hover:text-[var(--text-primary)]"
 			aria-label="Back to sessions"
 		>
 			<svg
@@ -218,15 +218,15 @@
 		</a>
 		<div class="min-w-0 flex-1">
 			<div class="flex items-center gap-2">
-				<span class="font-mono text-sm text-[#58a6ff]">{session?.name || sessionId.slice(0, 8)}</span>
+				<span class="font-mono text-sm text-[var(--accent)]">{session?.name || sessionId.slice(0, 8)}</span>
 				{#if session?.provider}
-					<span class="rounded bg-white/5 px-2 py-0.5 text-xs text-[rgba(230,237,243,0.5)]">{session.provider}</span>
+					<span class="rounded bg-[var(--bg-tertiary)]/50 px-2 py-0.5 text-xs text-[var(--text-secondary)]">{session.provider}</span>
 				{/if}
 				{#if session?.agent_role}
-					<span class="rounded bg-[#58a6ff]/10 px-2 py-0.5 text-xs text-[#58a6ff]/70">{session.agent_role}</span>
+					<span class="rounded bg-[var(--accent)]/10 px-2 py-0.5 text-xs text-[var(--accent)]/70">{session.agent_role}</span>
 				{/if}
 			</div>
-			<div class="mt-0.5 flex items-center gap-2 text-xs text-[rgba(230,237,243,0.3)]">
+			<div class="mt-0.5 flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
 				{#if session?.project_name}
 					<span>{session.project_name}</span>
 				{/if}
@@ -234,13 +234,13 @@
 					<span class="font-mono">{session.branch_name}</span>
 				{/if}
 				{#if session?.skill_name}
-					<span class="text-[rgba(230,237,243,0.4)]">{session.skill_name}</span>
+					<span class="text-[var(--text-secondary)]">{session.skill_name}</span>
 				{/if}
 				{#if session?.work_items?.length}
-					<span class="text-[#58a6ff]/50">{session.work_items.map(w => `#${w}`).join(', ')}</span>
+					<span class="text-[var(--accent)]/50">{session.work_items.map(w => `#${w}`).join(', ')}</span>
 				{/if}
 				{#if session?.model}
-					<span class="text-[rgba(230,237,243,0.25)]">{session.model}</span>
+					<span class="text-[var(--text-tertiary)]">{session.model}</span>
 				{/if}
 			</div>
 		</div>
@@ -263,7 +263,7 @@
 		>
 			{#if displayMessages.length === 0}
 				<div class="flex h-full items-center justify-center">
-					<p class="text-sm text-[rgba(230,237,243,0.3)]">
+					<p class="text-sm text-[var(--text-tertiary)]">
 						Send a message to start the conversation
 					</p>
 				</div>
@@ -284,7 +284,7 @@
 			{#if streamLoading}
 				<div class="mx-auto mt-4 flex max-w-3xl items-center gap-2">
 					<LoadingSpinner size="sm" />
-					<span class="text-xs text-[rgba(230,237,243,0.4)]">Thinking...</span>
+					<span class="text-xs text-[var(--text-secondary)]">Thinking...</span>
 				</div>
 			{/if}
 
@@ -299,7 +299,7 @@
 
 	<!-- Input area -->
 	<div
-		class="border-t border-white/10 bg-[#0d1117] px-4 py-3 md:px-6"
+		class="border-t border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 md:px-6"
 		style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
 	>
 		<form
@@ -315,14 +315,14 @@
 				rows={1}
 				disabled={streaming}
 				aria-label="Message input"
-				class="flex-1 resize-none rounded-lg border border-white/10 bg-[#161b22] px-4 py-2.5 text-sm text-[#e6edf3] placeholder:text-[rgba(230,237,243,0.3)] focus:border-[#58a6ff]/50 focus:outline-none disabled:opacity-50"
+				class="flex-1 resize-none rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent)]/50 focus:outline-none disabled:opacity-50"
 			></textarea>
 			<button
 				type="submit"
 				disabled={streaming || !inputText.trim()}
 				aria-label="Send message"
 				aria-disabled={streaming || !inputText.trim()}
-				class="shrink-0 rounded-lg bg-[#58a6ff] p-2.5 text-[#0d1117] transition-colors hover:bg-[#79b8ff] disabled:opacity-50 disabled:cursor-not-allowed"
+				class="shrink-0 rounded-lg bg-[var(--accent)] p-2.5 text-white transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
 			>
 				<svg
 					width="18"

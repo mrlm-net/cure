@@ -77,7 +77,11 @@ func NewAPIRouter(deps Deps) http.Handler {
 	if deps.ProjectStore != nil {
 		mux.HandleFunc("GET /api/project", projectListHandler(deps.ProjectStore))
 		mux.HandleFunc("GET /api/project/{name}", projectGetHandler(deps.ProjectStore))
+		mux.HandleFunc("PUT /api/project/{name}", projectUpdateHandler(deps.ProjectStore))
 	}
+
+	// Config update API
+	mux.HandleFunc("PUT /api/config", configUpdateHandler())
 
 	// File API (scoped to project roots)
 	mux.HandleFunc("GET /api/files", filesListHandler(deps.ProjectRoots))

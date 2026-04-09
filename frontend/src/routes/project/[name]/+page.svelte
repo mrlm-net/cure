@@ -1,61 +1,42 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { apiFetch } from '$lib/api';
+	import { goto } from '$app/navigation';
+	import { apiFetch, getBaseUrl } from '$lib/api';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import ErrorBanner from '$lib/components/ErrorBanner.svelte';
+	import { formatRelativeTime } from '$lib/utils';
 
-	interface Repo {
-		path: string;
-		remote?: string;
-		default_branch?: string;
-	}
-
-	interface Project {
-		name: string;
-		description?: string;
-		repos: Repo[];
-		defaults: {
-			provider?: string;
-			model?: string;
-			system_prompt?: string;
-			max_agents?: number;
-			max_turns?: number;
-			max_budget_usd?: number;
-			tracker?: {
-				type: string;
-				owner?: string;
-				repo?: string;
-				project_number?: number;
-			};
-		};
-		devcontainer?: {
-			image?: string;
-			dockerfile?: string;
-			features?: string[];
-		};
-		notifications?: {
-			teams?: { webhook_url?: string; bidirectional?: boolean };
-			local?: { enabled?: boolean; event_types?: string[] };
-		};
-		workflow?: {
-			branch_pattern?: string;
-			commit_pattern?: string;
-			require_review?: boolean;
-			protected_branches?: string[];
-		};
-		created_at: string;
+	interface Session {
+		id: string;
+		name?: string;
+		provider: string;
+		project_name?: string;
+		branch_name?: string;
 		updated_at: string;
+		turns: number;
 	}
 
 	const projectName = $derived($page.params.name ?? '');
 
-	let project = $state<Project | null>(null);
+	let projectJson = $state('');
+	let originalJson = $state('');
+	let sessions = $state<Session[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let saving = $state(false);
+	let tab = $state<'sessions' | 'config'>('sessions');
+	let dirty = $derived(projectJson !== originalJson);
 
-	async function fetchProject(): Promise<void> {
+	async function fetchData(): Promise<void> {
 		try {
-			project = await apiFetch<Project>(`/api/project/${projectName}`);
+			const [proj, allSessions] = await Promise.all([
+				apiFetch<any>(`/api/project/${projectName}`),
+				apiFetch<Session[]>('/api/context/sessions').catch(() => [])
+			]);
+			const json = JSON.stringify(proj, null, 2);
+			projectJson = json;
+			originalJson = json;
+			sessions = allSessions.filter(s => s.project_name === projectName);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load project';
 		} finally {
@@ -63,8 +44,41 @@
 		}
 	}
 
+	async function saveProject(): Promise<void> {
+		saving = true;
+		error = null;
+		try {
+			const parsed = JSON.parse(projectJson);
+			const base = getBaseUrl();
+			const res = await fetch(`${base}/api/project/${projectName}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: projectJson
+			});
+			if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+			originalJson = projectJson;
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to save';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function createSession(): Promise<void> {
+		try {
+			const data = await apiFetch<{ id: string }>('/api/context/sessions', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ project_name: projectName })
+			});
+			if (data?.id) goto(`/context/${data.id}`);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to create session';
+		}
+	}
+
 	$effect(() => {
-		fetchProject();
+		fetchData();
 	});
 </script>
 
@@ -72,144 +86,112 @@
 	<title>{projectName} - Projects - cure</title>
 </svelte:head>
 
-<div class="space-y-6">
-	<!-- Header -->
-	<div class="flex items-center gap-3">
-		<a
-			href="/project"
-			class="rounded-md p-1 text-[rgba(230,237,243,0.5)] transition-colors hover:bg-white/5 hover:text-[#e6edf3]"
-			aria-label="Back to projects"
-		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-				<path d="M15 18l-6-6 6-6" />
-			</svg>
-		</a>
-		<h1 class="text-xl font-semibold tracking-tight text-[#e6edf3]">{projectName}</h1>
-	</div>
-
-	{#if error}
-		<ErrorBanner message={error} onDismiss={() => (error = null)} />
-	{/if}
-
-	{#if loading}
-		<div class="flex items-center justify-center py-12">
-			<LoadingSpinner />
+{#if loading}
+	<div class="flex items-center justify-center py-20"><LoadingSpinner /></div>
+{:else}
+	<div class="space-y-4">
+		<!-- Header -->
+		<div class="flex items-center gap-3">
+			<a href="/project" class="rounded-md p-1 text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+			</a>
+			<h1 class="text-xl font-semibold text-[var(--text-primary)]">{projectName}</h1>
 		</div>
-	{:else if project}
-		<!-- Description -->
-		{#if project.description}
-			<p class="text-sm text-[rgba(230,237,243,0.5)]">{project.description}</p>
+
+		{#if error}
+			<ErrorBanner message={error} onDismiss={() => (error = null)} />
 		{/if}
 
-		<div class="grid gap-6 lg:grid-cols-2">
-			<!-- Repositories -->
-			<section class="rounded-lg border border-white/10 bg-[#161b22] p-5">
-				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-[rgba(230,237,243,0.4)]">Repositories</h2>
-				<div class="space-y-2">
-					{#each project.repos as repo}
-						<div class="rounded-md bg-white/5 px-3 py-2">
-							<div class="font-mono text-sm text-[#e6edf3]">{repo.path}</div>
-							{#if repo.remote}
-								<div class="mt-0.5 text-xs text-[rgba(230,237,243,0.3)]">{repo.remote}</div>
-							{/if}
-							{#if repo.default_branch}
-								<div class="mt-0.5 text-xs text-[rgba(230,237,243,0.3)]">branch: {repo.default_branch}</div>
-							{/if}
-						</div>
-					{/each}
+		<!-- Tabs -->
+		<div class="flex gap-1 border-b border-[var(--border)]">
+			<button
+				onclick={() => (tab = 'sessions')}
+				class="px-4 py-2 text-sm font-medium border-b-2 transition-colors
+					{tab === 'sessions' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+			>
+				Sessions ({sessions.length})
+			</button>
+			<button
+				onclick={() => (tab = 'config')}
+				class="px-4 py-2 text-sm font-medium border-b-2 transition-colors
+					{tab === 'config' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+			>
+				Configuration {dirty ? '*' : ''}
+			</button>
+		</div>
+
+		<!-- Sessions tab -->
+		{#if tab === 'sessions'}
+			<div class="space-y-3">
+				<div class="flex justify-end">
+					<button
+						onclick={createSession}
+						class="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+					>
+						New Session
+					</button>
 				</div>
-			</section>
 
-			<!-- Defaults -->
-			<section class="rounded-lg border border-white/10 bg-[#161b22] p-5">
-				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-[rgba(230,237,243,0.4)]">Defaults</h2>
-				<dl class="space-y-2 text-sm">
-					{#if project.defaults.provider}
-						<div class="flex justify-between"><dt class="text-[rgba(230,237,243,0.4)]">Provider</dt><dd class="text-[#e6edf3]">{project.defaults.provider}</dd></div>
-					{/if}
-					{#if project.defaults.model}
-						<div class="flex justify-between"><dt class="text-[rgba(230,237,243,0.4)]">Model</dt><dd class="font-mono text-[#e6edf3]">{project.defaults.model}</dd></div>
-					{/if}
-					{#if project.defaults.max_turns}
-						<div class="flex justify-between"><dt class="text-[rgba(230,237,243,0.4)]">Max turns</dt><dd class="text-[#e6edf3]">{project.defaults.max_turns}</dd></div>
-					{/if}
-					{#if project.defaults.max_budget_usd}
-						<div class="flex justify-between"><dt class="text-[rgba(230,237,243,0.4)]">Budget</dt><dd class="text-[#e6edf3]">${project.defaults.max_budget_usd}</dd></div>
-					{/if}
-					{#if project.defaults.max_agents}
-						<div class="flex justify-between"><dt class="text-[rgba(230,237,243,0.4)]">Max agents</dt><dd class="text-[#e6edf3]">{project.defaults.max_agents}</dd></div>
-					{/if}
-				</dl>
-				{#if project.defaults.tracker}
-					<div class="mt-3 border-t border-white/5 pt-3">
-						<h3 class="mb-1 text-xs font-medium text-[rgba(230,237,243,0.3)]">Tracker</h3>
-						<div class="text-sm text-[#e6edf3]">{project.defaults.tracker.type}: {project.defaults.tracker.owner}/{project.defaults.tracker.repo}</div>
+				{#if sessions.length === 0}
+					<div class="py-12 text-center">
+						<p class="text-sm text-[var(--text-secondary)]">No sessions for this project</p>
 					</div>
+				{:else}
+					{#each sessions as s (s.id)}
+						<a
+							href="/context/{s.id}"
+							class="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3 hover:border-[var(--accent)]/30"
+						>
+							<div>
+								<div class="flex items-center gap-2">
+									<span class="font-mono text-sm text-[var(--accent)]">{s.name || s.id.slice(0, 8)}</span>
+									<span class="rounded bg-[var(--bg-tertiary)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">{s.provider}</span>
+								</div>
+								<div class="mt-1 flex gap-3 text-xs text-[var(--text-tertiary)]">
+									<span>{formatRelativeTime(s.updated_at)}</span>
+									<span>{s.turns} turns</span>
+									{#if s.branch_name}
+										<span class="font-mono">{s.branch_name}</span>
+									{/if}
+								</div>
+							</div>
+						</a>
+					{/each}
 				{/if}
-			</section>
+			</div>
+		{/if}
 
-			<!-- Workflow -->
-			{#if project.workflow}
-				<section class="rounded-lg border border-white/10 bg-[#161b22] p-5">
-					<h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-[rgba(230,237,243,0.4)]">Workflow</h2>
-					<dl class="space-y-2 text-sm">
-						{#if project.workflow.branch_pattern}
-							<div><dt class="text-[rgba(230,237,243,0.4)]">Branch pattern</dt><dd class="mt-0.5 font-mono text-xs text-[#e6edf3]">{project.workflow.branch_pattern}</dd></div>
+		<!-- Config tab (editable JSON) -->
+		{#if tab === 'config'}
+			<div class="space-y-3">
+				<div class="flex items-center justify-between">
+					<span class="text-xs text-[var(--text-tertiary)]">~/.cure/projects/{projectName}/project.json</span>
+					<div class="flex gap-2">
+						{#if dirty}
+							<button
+								onclick={() => (projectJson = originalJson)}
+								class="rounded-md bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+							>
+								Discard
+							</button>
 						{/if}
-						{#if project.workflow.commit_pattern}
-							<div><dt class="text-[rgba(230,237,243,0.4)]">Commit pattern</dt><dd class="mt-0.5 font-mono text-xs text-[#e6edf3]">{project.workflow.commit_pattern}</dd></div>
-						{/if}
-						{#if project.workflow.protected_branches?.length}
-							<div><dt class="text-[rgba(230,237,243,0.4)]">Protected</dt><dd class="mt-0.5 text-[#e6edf3]">{project.workflow.protected_branches.join(', ')}</dd></div>
-						{/if}
-						{#if project.workflow.require_review}
-							<div class="flex justify-between"><dt class="text-[rgba(230,237,243,0.4)]">Review required</dt><dd class="text-[#e6edf3]">Yes</dd></div>
-						{/if}
-					</dl>
-				</section>
-			{/if}
+						<button
+							onclick={saveProject}
+							disabled={!dirty || saving}
+							class="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs text-white disabled:opacity-50"
+						>
+							{saving ? 'Saving...' : 'Save'}
+						</button>
+					</div>
+				</div>
 
-			<!-- Notifications -->
-			{#if project.notifications}
-				<section class="rounded-lg border border-white/10 bg-[#161b22] p-5">
-					<h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-[rgba(230,237,243,0.4)]">Notifications</h2>
-					<dl class="space-y-2 text-sm">
-						{#if project.notifications.teams}
-							<div class="flex justify-between">
-								<dt class="text-[rgba(230,237,243,0.4)]">Teams</dt>
-								<dd class="text-[#e6edf3]">{project.notifications.teams.webhook_url ? 'Configured' : 'Not configured'}</dd>
-							</div>
-						{/if}
-						{#if project.notifications.local}
-							<div class="flex justify-between">
-								<dt class="text-[rgba(230,237,243,0.4)]">Local</dt>
-								<dd class="text-[#e6edf3]">{project.notifications.local.enabled ? 'Enabled' : 'Disabled'}</dd>
-							</div>
-						{/if}
-					</dl>
-				</section>
-			{/if}
-
-			<!-- Devcontainer -->
-			{#if project.devcontainer}
-				<section class="rounded-lg border border-white/10 bg-[#161b22] p-5">
-					<h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-[rgba(230,237,243,0.4)]">Devcontainer</h2>
-					<dl class="space-y-2 text-sm">
-						{#if project.devcontainer.image}
-							<div><dt class="text-[rgba(230,237,243,0.4)]">Image</dt><dd class="mt-0.5 font-mono text-xs text-[#e6edf3]">{project.devcontainer.image}</dd></div>
-						{/if}
-						{#if project.devcontainer.dockerfile}
-							<div><dt class="text-[rgba(230,237,243,0.4)]">Dockerfile</dt><dd class="mt-0.5 font-mono text-xs text-[#e6edf3]">{project.devcontainer.dockerfile}</dd></div>
-						{/if}
-					</dl>
-				</section>
-			{/if}
-		</div>
-
-		<!-- Timestamps -->
-		<div class="flex gap-6 text-xs text-[rgba(230,237,243,0.2)]">
-			<span>Created: {new Date(project.created_at).toLocaleDateString()}</span>
-			<span>Updated: {new Date(project.updated_at).toLocaleDateString()}</span>
-		</div>
-	{/if}
-</div>
+				<textarea
+					bind:value={projectJson}
+					class="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-4 font-mono text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
+					rows={25}
+					spellcheck="false"
+				></textarea>
+			</div>
+		{/if}
+	</div>
+{/if}

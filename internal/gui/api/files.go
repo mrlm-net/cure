@@ -16,22 +16,44 @@ type FileEntry struct {
 	Size  int64  `json:"size"`
 }
 
+// resolveFilePath resolves a relative path against project roots.
+// Returns absolute path and validates it's within boundaries.
+func resolveFilePath(relPath string, roots []string) (string, bool) {
+	if filepath.IsAbs(relPath) {
+		return relPath, isWithinRoots(relPath, roots)
+	}
+
+	// Resolve against the first project root (or cwd)
+	base := "."
+	if len(roots) > 0 {
+		base = roots[0]
+	}
+
+	absPath := filepath.Join(base, relPath)
+	absPath = filepath.Clean(absPath)
+
+	abs, err := filepath.Abs(absPath)
+	if err != nil {
+		return "", false
+	}
+
+	return abs, isWithinRoots(abs, roots)
+}
+
 // filesListHandler returns directory listings.
 func filesListHandler(projectRoots []string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Query().Get("path")
-		if path == "" {
-			path = "."
+		if path == "" || path == "." {
+			if len(projectRoots) > 0 {
+				path = projectRoots[0]
+			} else {
+				path = "."
+			}
 		}
 
-		// Resolve to absolute and validate
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid path")
-			return
-		}
-
-		if !isWithinRoots(absPath, projectRoots) {
+		absPath, ok := resolveFilePath(path, projectRoots)
+		if !ok {
 			writeError(w, http.StatusForbidden, "path outside project boundaries")
 			return
 		}
@@ -45,7 +67,7 @@ func filesListHandler(projectRoots []string) http.HandlerFunc {
 		files := make([]FileEntry, 0, len(entries))
 		for _, e := range entries {
 			if strings.HasPrefix(e.Name(), ".") {
-				continue // skip hidden files
+				continue
 			}
 			info, err := e.Info()
 			if err != nil {
@@ -67,13 +89,9 @@ func filesListHandler(projectRoots []string) http.HandlerFunc {
 func fileReadHandler(projectRoots []string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid path")
-			return
-		}
 
-		if !isWithinRoots(absPath, projectRoots) {
+		absPath, ok := resolveFilePath(path, projectRoots)
+		if !ok {
 			writeError(w, http.StatusForbidden, "path outside project boundaries")
 			return
 		}
@@ -107,13 +125,9 @@ func fileReadHandler(projectRoots []string) http.HandlerFunc {
 func fileWriteHandler(projectRoots []string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid path")
-			return
-		}
 
-		if !isWithinRoots(absPath, projectRoots) {
+		absPath, ok := resolveFilePath(path, projectRoots)
+		if !ok {
 			writeError(w, http.StatusForbidden, "path outside project boundaries")
 			return
 		}
@@ -142,7 +156,7 @@ func fileWriteHandler(projectRoots []string) http.HandlerFunc {
 // isWithinRoots checks that path is within at least one allowed root.
 func isWithinRoots(path string, roots []string) bool {
 	if len(roots) == 0 {
-		return true // no restrictions if no roots configured
+		return true
 	}
 	for _, root := range roots {
 		absRoot, err := filepath.Abs(root)

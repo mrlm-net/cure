@@ -101,8 +101,8 @@
 			href={item.href}
 			class="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors
 				{active
-					? 'bg-[rgba(88,166,255,0.15)] text-[#58a6ff]'
-					: 'text-[rgba(230,237,243,0.5)] hover:bg-white/5 hover:text-[var(--text-primary)]'}"
+					? 'bg-[var(--accent-subtle)] text-[var(--accent)]'
+					: 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]/50 hover:text-[var(--text-primary)]'}"
 			aria-current={active ? 'page' : undefined}
 		>
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -115,7 +115,7 @@
 
 <a
 	href="#main-content"
-	class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-[var(--bg-secondary)] focus:px-4 focus:py-2 focus:text-[#58a6ff]"
+	class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-[var(--bg-secondary)] focus:px-4 focus:py-2 focus:text-[var(--accent)]"
 >
 	Skip to content
 </a>
@@ -124,7 +124,7 @@
 <div class="fixed top-0 left-0 right-0 z-30 flex items-center border-b border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3 md:hidden">
 	<button
 		onclick={() => (mobileNavOpen = !mobileNavOpen)}
-		class="rounded p-1 text-[var(--text-primary)] hover:bg-white/10"
+		class="rounded p-1 text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
 		aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
 		aria-expanded={mobileNavOpen}
 	>
@@ -170,7 +170,7 @@
 
 		<!-- Tools section -->
 		<div class="mt-6 mb-2 px-3">
-			<span class="text-[10px] font-semibold uppercase tracking-widest text-[rgba(230,237,243,0.25)]">Tools</span>
+			<span class="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-tertiary)]">Tools</span>
 		</div>
 		<ul class="space-y-1">
 			{#each toolsNav as item}

@@ -36,7 +36,7 @@
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
-		<h1 class="text-xl font-semibold tracking-tight text-[#e6edf3]">Projects</h1>
+		<h1 class="text-xl font-semibold tracking-tight text-[var(--text-primary)]">Projects</h1>
 	</div>
 
 	{#if error}
@@ -50,11 +50,11 @@
 
 	{:else if projects.length === 0}
 		<div class="flex flex-col items-center justify-center py-16 text-center">
-			<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(230,237,243,0.2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="mb-4">
+			<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="mb-4">
 				<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
 			</svg>
-			<p class="text-sm text-[rgba(230,237,243,0.5)]">No projects configured</p>
-			<p class="mt-1 text-xs text-[rgba(230,237,243,0.3)]">Create one with <code class="rounded bg-white/5 px-1.5 py-0.5">cure project init</code></p>
+			<p class="text-sm text-[var(--text-secondary)]">No projects configured</p>
+			<p class="mt-1 text-xs text-[var(--text-tertiary)]">Create one with <code class="rounded bg-[var(--bg-tertiary)]/50 px-1.5 py-0.5">cure project init</code></p>
 		</div>
 
 	{:else}
@@ -62,22 +62,22 @@
 			{#each projects as project (project.name)}
 				<a
 					href="/project/{project.name}"
-					class="group rounded-lg border border-white/10 bg-[#161b22] p-5 transition-colors hover:border-[#58a6ff]/30 hover:bg-[#161b22]/80"
+					class="group rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5 transition-colors hover:border-[#58a6ff]/30 hover:bg-[var(--bg-secondary)]/80"
 				>
 					<div class="flex items-start justify-between">
-						<h2 class="font-medium text-[#e6edf3] group-hover:text-[#58a6ff]">
+						<h2 class="font-medium text-[var(--text-primary)] group-hover:text-[var(--accent)]">
 							{project.name}
 						</h2>
-						<span class="rounded bg-white/5 px-2 py-0.5 text-xs text-[rgba(230,237,243,0.4)]">
+						<span class="rounded bg-[var(--bg-tertiary)]/50 px-2 py-0.5 text-xs text-[var(--text-secondary)]">
 							{project.repos.length} repo{project.repos.length !== 1 ? 's' : ''}
 						</span>
 					</div>
 					{#if project.description}
-						<p class="mt-2 text-sm text-[rgba(230,237,243,0.4)] line-clamp-2">
+						<p class="mt-2 text-sm text-[var(--text-secondary)] line-clamp-2">
 							{project.description}
 						</p>
 					{/if}
-					<div class="mt-3 flex items-center gap-3 text-xs text-[rgba(230,237,243,0.3)]">
+					<div class="mt-3 flex items-center gap-3 text-xs text-[var(--text-tertiary)]">
 						{#if project.defaults.provider}
 							<span>{project.defaults.provider}</span>
 						{/if}

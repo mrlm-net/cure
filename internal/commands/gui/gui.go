@@ -13,6 +13,7 @@ import (
 
 	"github.com/mrlm-net/cure/internal/gui"
 	"github.com/mrlm-net/cure/internal/gui/api"
+	"github.com/mrlm-net/cure/internal/gui/ws"
 	"github.com/mrlm-net/cure/pkg/agent"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/doctor"
@@ -67,6 +68,39 @@ func (c *GUICommand) Flags() *flag.FlagSet {
 	return fs
 }
 
+func makeAgentRun(cfgData config.ConfigObject) api.AgentRunFunc {
+	model, _ := cfgData["agent.claude.model"].(string)
+	if model == "" {
+		model = "claude-sonnet-4-6"
+	}
+
+	a, err := agent.New("claude", map[string]any{"model": model})
+	if err != nil {
+		a, err = agent.New("claude-stream", map[string]any{"model": model})
+	}
+	if err != nil {
+		return nil
+	}
+
+	return func(ctx context.Context, sess *agent.Session) <-chan api.AgentResult {
+		ch := make(chan api.AgentResult, 16)
+		go func() {
+			defer close(ch)
+			for ev, err := range a.Run(ctx, sess) {
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- api.AgentResult{Event: ev, Err: err}:
+				}
+				if err != nil {
+					return
+				}
+			}
+		}()
+		return ch
+	}
+}
+
 // Run starts the GUI server and blocks until the context is cancelled or
 // SIGINT/SIGTERM is received.
 func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
@@ -101,6 +135,7 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 		Checks:       c.checks,
 		Port:         c.port,
 		Store:        c.store,
+		AgentRun:     makeAgentRun(c.cfgData),
 		ProjectStore: c.projectStore,
 		ProjectName:  projectName,
 		ProjectRoots: projectRoots,
@@ -110,6 +145,13 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", apiRouter)
+
+	// WebSocket endpoints for terminal
+	termWorkDir := "."
+	if len(projectRoots) > 0 {
+		termWorkDir = projectRoots[0]
+	}
+	mux.Handle("/api/terminal/", ws.TerminalHandler(termWorkDir))
 
 	var opts []gui.Option
 	if c.port > 0 {
