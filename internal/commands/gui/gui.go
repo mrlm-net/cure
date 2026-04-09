@@ -74,9 +74,10 @@ func makeAgentRun(cfgData config.ConfigObject) api.AgentRunFunc {
 		model = "claude-sonnet-4-6"
 	}
 
+	// Try API direct first, then Claude Code CLI (unified adapter with streaming + tool events)
 	a, err := agent.New("claude", map[string]any{"model": model})
 	if err != nil {
-		a, err = agent.New("claude-stream", map[string]any{"model": model})
+		a, err = agent.New("claude-code", map[string]any{"model": model})
 	}
 	if err != nil {
 		return nil

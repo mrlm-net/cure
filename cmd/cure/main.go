@@ -7,7 +7,6 @@ import (
 
 	_ "github.com/mrlm-net/cure/internal/agent/claude"
 	_ "github.com/mrlm-net/cure/internal/agent/claudecode"
-	_ "github.com/mrlm-net/cure/internal/agent/claudestream"
 	_ "github.com/mrlm-net/cure/internal/agent/gemini"
 	_ "github.com/mrlm-net/cure/internal/agent/openai"
 	"github.com/mrlm-net/cure/internal/commands"

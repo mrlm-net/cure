@@ -24,10 +24,17 @@
 		skill_name?: string;
 	}
 
+	interface ToolCallEvent {
+		id: string;
+		tool_name: string;
+		input_json: string;
+	}
+
 	interface SSEEvent {
 		kind: string;
 		text?: string;
 		error?: string;
+		tool_call?: ToolCallEvent;
 	}
 
 	const sessionId = $derived($page.params.id ?? '');
@@ -40,6 +47,8 @@
 	let streaming = $state(false);
 	let streamLoading = $state(false);
 	let streamBuffer = $state('');
+	let activeTool = $state<string | null>(null);
+	let hadToolActivity = $state(false);
 	let messagesContainer: HTMLDivElement | undefined = $state();
 	let textarea: HTMLTextAreaElement | undefined = $state();
 	let userScrolledUp = $state(false);
@@ -106,6 +115,8 @@
 		streaming = true;
 		streamLoading = true;
 		streamBuffer = '';
+		activeTool = null;
+		hadToolActivity = false;
 		userScrolledUp = false;
 		error = null;
 
@@ -143,14 +154,29 @@
 					try {
 						const event: SSEEvent = JSON.parse(line.slice(6));
 						if (event.kind === 'start') {
-							streamLoading = false;
+							// Keep streamLoading true until first token arrives
 						} else if (event.kind === 'token') {
-							streamBuffer += event.text ?? '';
+							streamLoading = false;
+							activeTool = null;
+							const sep = hadToolActivity && streamBuffer.length > 0 ? '\n\n' : '';
+							hadToolActivity = false;
+							streamBuffer += sep + (event.text ?? '');
 							scrollToBottom();
+						} else if (event.kind === 'tool_call') {
+							streamLoading = false;
+							hadToolActivity = true;
+							activeTool = event.tool_call?.tool_name ?? 'tool';
+							scrollToBottom();
+						} else if (event.kind === 'tool_result') {
+							hadToolActivity = true;
 						} else if (event.kind === 'done') {
+							activeTool = null;
+							hadToolActivity = false;
 							streaming = false;
 							await refreshSession();
 						} else if (event.kind === 'error') {
+							activeTool = null;
+							hadToolActivity = false;
 							error = event.error ?? 'Stream error';
 							streaming = false;
 						}
@@ -164,6 +190,7 @@
 		} finally {
 			streaming = false;
 			streamLoading = false;
+			activeTool = null;
 		}
 	}
 
@@ -280,11 +307,15 @@
 				</div>
 			{/if}
 
-			<!-- Stream loading indicator -->
-			{#if streamLoading}
+			<!-- Thinking / tool-use indicator -->
+			{#if streamLoading || activeTool}
 				<div class="mx-auto mt-4 flex max-w-3xl items-center gap-2">
 					<LoadingSpinner size="sm" />
-					<span class="text-xs text-[var(--text-secondary)]">Thinking...</span>
+					{#if activeTool}
+						<span class="font-mono text-xs text-[var(--text-secondary)]">{activeTool}</span>
+					{:else}
+						<span class="text-xs text-[var(--text-secondary)]">Thinking...</span>
+					{/if}
 				</div>
 			{/if}
 

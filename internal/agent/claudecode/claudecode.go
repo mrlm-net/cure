@@ -202,6 +202,7 @@ func (a *claudeCodeAdapter) buildArgs(sess *agent.Session, prompt string) []stri
 	args := []string{
 		"-p", prompt,
 		"--output-format", "stream-json",
+		"--include-partial-messages",
 		"--verbose",
 		"--model", a.model,
 		"--max-turns", fmt.Sprintf("%d", a.maxTurns),
