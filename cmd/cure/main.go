@@ -21,6 +21,7 @@ import (
 	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
 	"github.com/mrlm-net/cure/pkg/config"
 	pkgdoctor "github.com/mrlm-net/cure/pkg/doctor"
+	"github.com/mrlm-net/cure/pkg/project"
 	"github.com/mrlm-net/cure/pkg/template"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
@@ -89,6 +90,19 @@ func loadConfig() *config.Config {
 		}
 	}
 
+	// Project config — auto-detect project from cwd and load its defaults.
+	// Slots between global and local in the merge chain.
+	var projectCfg config.ConfigObject
+	if baseDir, err := project.DefaultBaseDir(); err == nil {
+		store := project.NewStore(baseDir)
+		detector := project.NewDetector(store)
+		if cwd, err := os.Getwd(); err == nil {
+			if p, err := detector.Detect(cwd); err == nil && p != nil {
+				projectCfg = projectToConfigObject(p)
+			}
+		}
+	}
+
 	// Local config (./.cure.json)
 	localPath := ".cure.json"
 	localCfg, err := config.File(localPath)
@@ -99,7 +113,41 @@ func loadConfig() *config.Config {
 	// Environment variables (highest precedence for file-based config)
 	envCfg := config.Environment("CURE_", "_")
 
-	// Merge with precedence: defaults < global < local < env
+	// Merge with precedence: defaults < global < project < local < env
 	// Note: CLI flags are applied per-command, not here
-	return config.NewConfig(defaults, globalCfg, localCfg, envCfg)
+	return config.NewConfig(defaults, globalCfg, projectCfg, localCfg, envCfg)
+}
+
+// projectToConfigObject converts project defaults into a ConfigObject so they
+// can participate in the standard config merge chain.
+func projectToConfigObject(p *project.Project) config.ConfigObject {
+	obj := config.ConfigObject{}
+	if p.Defaults.Provider != "" {
+		obj["agent.provider"] = p.Defaults.Provider
+	}
+	if p.Defaults.Model != "" {
+		obj["agent.claude.model"] = p.Defaults.Model
+	}
+	if p.Defaults.MaxTurns > 0 {
+		obj["agent.max_turns"] = p.Defaults.MaxTurns
+	}
+	if p.Defaults.MaxBudgetUSD > 0 {
+		obj["agent.max_budget_usd"] = p.Defaults.MaxBudgetUSD
+	}
+	if p.Defaults.SystemPrompt != "" {
+		obj["agent.system_prompt"] = p.Defaults.SystemPrompt
+	}
+	if p.Defaults.MaxAgents > 0 {
+		obj["agent.max_agents"] = p.Defaults.MaxAgents
+	}
+	if p.Defaults.Tracker != nil {
+		obj["tracker.type"] = p.Defaults.Tracker.Type
+		if p.Defaults.Tracker.Owner != "" {
+			obj["tracker.owner"] = p.Defaults.Tracker.Owner
+		}
+		if p.Defaults.Tracker.Repo != "" {
+			obj["tracker.repo"] = p.Defaults.Tracker.Repo
+		}
+	}
+	return obj
 }
