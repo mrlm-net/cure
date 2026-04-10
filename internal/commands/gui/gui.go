@@ -145,14 +145,15 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 	apiRouter := api.NewAPIRouter(deps)
 
 	mux := http.NewServeMux()
-	mux.Handle("/api/", apiRouter)
 
-	// WebSocket endpoints for terminal
+	// WebSocket endpoints BEFORE the catch-all /api/ handler
 	termWorkDir := "."
 	if len(projectRoots) > 0 {
 		termWorkDir = projectRoots[0]
 	}
 	mux.Handle("/api/terminal/", ws.TerminalHandler(termWorkDir))
+
+	mux.Handle("/api/", apiRouter)
 
 	var opts []gui.Option
 	if c.port > 0 {
