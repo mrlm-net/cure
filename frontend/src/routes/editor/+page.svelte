@@ -146,7 +146,7 @@
 
 	async function fetchRoots(): Promise<void> {
 		try {
-			roots = await apiFetch<RepoRoot[]>('/api/files/roots');
+			roots = await apiFetch<RepoRoot[]>('/api/editor/roots');
 			if (roots.length > 0) {
 				currentRoot = roots[0].path;
 				await fetchFiles(roots[0].path);
