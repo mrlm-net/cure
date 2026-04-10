@@ -93,7 +93,7 @@
 		const path = currentPath && currentPath !== '.' ? `${currentPath}/${name}` : name;
 		try {
 			const base = getBaseUrl();
-			const res = await fetch(`${base}/api/files/${path}`);
+			const res = await fetch(`${base}/api/files?path=${encodeURIComponent(path)}&content=true`);
 			if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
 			const content = await res.text();
 			currentFile = path;
@@ -123,7 +123,7 @@
 		saving = true;
 		try {
 			const base = getBaseUrl();
-			const res = await fetch(`${base}/api/files/${currentFile}`, {
+			const res = await fetch(`${base}/api/files?path=${encodeURIComponent(currentFile)}&write=true`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'text/plain' },
 				body: fileContent

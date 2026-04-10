@@ -87,6 +87,7 @@ func NewAPIRouter(deps Deps) http.Handler {
 	// File API (scoped to project roots)
 	mux.HandleFunc("GET /api/editor/roots", fileRootsHandler(deps.ProjectRoots))
 	mux.HandleFunc("GET /api/files", filesListHandler(deps.ProjectRoots))
+	mux.HandleFunc("PUT /api/files", fileWriteQueryHandler(deps.ProjectRoots))
 	mux.HandleFunc("GET /api/files/{path...}", fileReadHandler(deps.ProjectRoots))
 	mux.HandleFunc("PUT /api/files/{path...}", fileWriteHandler(deps.ProjectRoots))
 

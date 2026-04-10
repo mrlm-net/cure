@@ -40,7 +40,7 @@ func resolveFilePath(relPath string, roots []string) (string, bool) {
 	return abs, isWithinRoots(abs, roots)
 }
 
-// filesListHandler returns directory listings.
+// filesListHandler returns directory listings or file content (when content=true).
 func filesListHandler(projectRoots []string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Query().Get("path")
@@ -55,6 +55,31 @@ func filesListHandler(projectRoots []string) http.HandlerFunc {
 		absPath, ok := resolveFilePath(path, projectRoots)
 		if !ok {
 			writeError(w, http.StatusForbidden, "path outside project boundaries")
+			return
+		}
+
+		// If content=true, serve file content directly
+		if r.URL.Query().Get("content") == "true" {
+			info, err := os.Stat(absPath)
+			if err != nil {
+				writeError(w, http.StatusNotFound, "file not found")
+				return
+			}
+			if info.IsDir() {
+				writeError(w, http.StatusBadRequest, "path is a directory")
+				return
+			}
+			if info.Size() > 5*1024*1024 {
+				writeError(w, http.StatusRequestEntityTooLarge, "file too large (max 5 MB)")
+				return
+			}
+			data, err := os.ReadFile(absPath)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to read file")
+				return
+			}
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Write(data)
 			return
 		}
 
@@ -149,6 +174,37 @@ func fileWriteHandler(projectRoots []string) http.HandlerFunc {
 			return
 		}
 
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// fileWriteQueryHandler writes file content using ?path= query param.
+func fileWriteQueryHandler(projectRoots []string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Query().Get("path")
+		if path == "" {
+			writeError(w, http.StatusBadRequest, "path required")
+			return
+		}
+		absPath, ok := resolveFilePath(path, projectRoots)
+		if !ok {
+			writeError(w, http.StatusForbidden, "path outside project boundaries")
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, 5*1024*1024))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "failed to read body")
+			return
+		}
+		dir := filepath.Dir(absPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to create directory")
+			return
+		}
+		if err := os.WriteFile(absPath, body, 0644); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to write file")
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
