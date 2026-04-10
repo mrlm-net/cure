@@ -23,6 +23,28 @@ func projectListHandler(store project.ProjectStore) http.HandlerFunc {
 	}
 }
 
+// projectCreateHandler creates a new project.
+func projectCreateHandler(store project.ProjectStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var p project.Project
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		if err := project.ValidateName(p.Name); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := store.Save(&p); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to create project")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(p)
+	}
+}
+
 // projectGetHandler returns a single project by name.
 func projectGetHandler(store project.ProjectStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
