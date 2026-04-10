@@ -130,6 +130,7 @@
 						class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 font-mono text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
 					/>
 				</div>
+				{#if settings.default_provider === 'claude' || settings.default_provider === 'openai' || settings.default_provider === 'gemini'}
 				<div>
 					<label class="block mb-1 text-sm text-[var(--text-secondary)]">Max Tokens</label>
 					<input
@@ -138,6 +139,7 @@
 						class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
 					/>
 				</div>
+				{/if}
 				<div>
 					<label class="block mb-1 text-sm text-[var(--text-secondary)]">Timeout (seconds)</label>
 					<input
