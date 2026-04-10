@@ -7,11 +7,6 @@
 		workdir: string;
 		default_provider: string;
 		default_model: string;
-		max_tokens: number;
-		output_format: string;
-		timeout: number;
-		verbose: boolean;
-		redact: boolean;
 	}
 
 	let settings = $state<Settings | null>(null);
@@ -69,7 +64,7 @@
 	<div class="flex items-center justify-between">
 		<div>
 			<h1 class="text-xl font-semibold text-[var(--text-primary)]">Settings</h1>
-			<p class="mt-1 text-xs text-[var(--text-tertiary)]">Global cure configuration. Saved to ~/.cure/config.json</p>
+			<p class="mt-1 text-xs text-[var(--text-tertiary)]">Global cure user configuration (~/.cure/config.json). Project-specific settings are managed per project.</p>
 		</div>
 		<div class="flex items-center gap-2">
 			{#if saved}
@@ -103,84 +98,34 @@
 				class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 font-mono text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
 				placeholder="~/.cure/workdir"
 			/>
-			<p class="mt-1 text-xs text-[var(--text-tertiary)]">Root directory for cure-managed repository clones</p>
+			<p class="mt-1 text-xs text-[var(--text-tertiary)]">Root directory for cure-managed repository clones and isolated agent workspaces</p>
 		</section>
 
-		<!-- AI Provider -->
+		<!-- Default AI Provider -->
 		<section class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
-			<h2 class="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">AI Provider</h2>
+			<h2 class="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Default AI Provider</h2>
+			<p class="mb-3 text-xs text-[var(--text-tertiary)]">Used when a project doesn't specify its own provider. Override per project in project configuration.</p>
 			<div class="grid gap-4 sm:grid-cols-2">
 				<div>
-					<label class="block mb-1 text-sm text-[var(--text-secondary)]">Default Provider</label>
+					<label class="block mb-1 text-sm text-[var(--text-secondary)]">Provider</label>
 					<select
 						bind:value={settings.default_provider}
 						class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
 					>
-						<option value="claude">Claude (API)</option>
 						<option value="claude-code">Claude Code (CLI)</option>
+						<option value="claude">Claude (API)</option>
 						<option value="openai">OpenAI</option>
 						<option value="gemini">Gemini</option>
 					</select>
 				</div>
 				<div>
-					<label class="block mb-1 text-sm text-[var(--text-secondary)]">Default Model</label>
+					<label class="block mb-1 text-sm text-[var(--text-secondary)]">Model</label>
 					<input
 						bind:value={settings.default_model}
 						type="text"
 						class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 font-mono text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
 					/>
 				</div>
-				{#if settings.default_provider === 'claude' || settings.default_provider === 'openai' || settings.default_provider === 'gemini'}
-				<div>
-					<label class="block mb-1 text-sm text-[var(--text-secondary)]">Max Tokens</label>
-					<input
-						bind:value={settings.max_tokens}
-						type="number"
-						class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
-					/>
-				</div>
-				{/if}
-				<div>
-					<label class="block mb-1 text-sm text-[var(--text-secondary)]">Timeout (seconds)</label>
-					<input
-						bind:value={settings.timeout}
-						type="number"
-						class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
-					/>
-				</div>
-			</div>
-		</section>
-
-		<!-- Output -->
-		<section class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
-			<h2 class="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Output</h2>
-			<div class="grid gap-4 sm:grid-cols-2">
-				<div>
-					<label class="block mb-1 text-sm text-[var(--text-secondary)]">Format</label>
-					<select
-						bind:value={settings.output_format}
-						class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
-					>
-						<option value="json">JSON</option>
-						<option value="text">Text</option>
-					</select>
-				</div>
-			</div>
-			<div class="mt-4 space-y-3">
-				<label class="flex items-center gap-3 cursor-pointer">
-					<input type="checkbox" bind:checked={settings.verbose} class="rounded border-[var(--border)] bg-[var(--bg-primary)] text-[var(--accent)] focus:ring-[var(--accent)]" />
-					<div>
-						<span class="text-sm text-[var(--text-primary)]">Verbose</span>
-						<p class="text-xs text-[var(--text-tertiary)]">Enable verbose logging output</p>
-					</div>
-				</label>
-				<label class="flex items-center gap-3 cursor-pointer">
-					<input type="checkbox" bind:checked={settings.redact} class="rounded border-[var(--border)] bg-[var(--bg-primary)] text-[var(--accent)] focus:ring-[var(--accent)]" />
-					<div>
-						<span class="text-sm text-[var(--text-primary)]">Redact</span>
-						<p class="text-xs text-[var(--text-tertiary)]">Redact sensitive values in output</p>
-					</div>
-				</label>
 			</div>
 		</section>
 	{/if}

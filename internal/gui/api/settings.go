@@ -7,16 +7,12 @@ import (
 	"path/filepath"
 )
 
-// Settings represents the global cure user settings shown in the form.
+// Settings represents the global cure user settings.
+// Project-specific settings (tokens, timeout, tracker) belong in project config.
 type Settings struct {
-	WorkDir        string `json:"workdir"`
+	WorkDir         string `json:"workdir"`
 	DefaultProvider string `json:"default_provider"`
-	DefaultModel   string `json:"default_model"`
-	MaxTokens      int    `json:"max_tokens"`
-	OutputFormat   string `json:"output_format"`
-	Timeout        int    `json:"timeout"`
-	Verbose        bool   `json:"verbose"`
-	Redact         bool   `json:"redact"`
+	DefaultModel    string `json:"default_model"`
 }
 
 func settingsPath() string {
@@ -30,11 +26,6 @@ func settingsGetHandler() http.HandlerFunc {
 		s := Settings{
 			DefaultProvider: "claude-code",
 			DefaultModel:   "claude-sonnet-4-6",
-			MaxTokens:      8192,
-			OutputFormat:    "json",
-			Timeout:        30,
-			Verbose:        false,
-			Redact:         true,
 		}
 
 		home, _ := os.UserHomeDir()
