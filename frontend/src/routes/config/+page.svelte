@@ -65,7 +65,7 @@
 	<title>Settings - cure</title>
 </svelte:head>
 
-<div class="space-y-6 max-w-2xl">
+<div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<div>
 			<h1 class="text-xl font-semibold text-[var(--text-primary)]">Settings</h1>
@@ -116,7 +116,8 @@
 						bind:value={settings.default_provider}
 						class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
 					>
-						<option value="claude">Claude</option>
+						<option value="claude">Claude (API)</option>
+						<option value="claude-code">Claude Code (CLI)</option>
 						<option value="openai">OpenAI</option>
 						<option value="gemini">Gemini</option>
 					</select>

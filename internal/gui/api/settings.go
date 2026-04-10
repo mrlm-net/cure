@@ -28,7 +28,7 @@ func settingsGetHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Defaults
 		s := Settings{
-			DefaultProvider: "claude",
+			DefaultProvider: "claude-code",
 			DefaultModel:   "claude-sonnet-4-6",
 			MaxTokens:      8192,
 			OutputFormat:    "json",
