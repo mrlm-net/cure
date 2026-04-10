@@ -119,5 +119,5 @@
 		</div>
 	{/if}
 
-	<div bind:this={termContainer} class="flex-1 p-3"></div>
+	<div bind:this={termContainer} class="flex-1 overflow-hidden p-3" style="min-height: 0;"></div>
 </div>
