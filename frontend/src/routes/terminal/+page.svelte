@@ -2,108 +2,98 @@
 	import { onMount } from 'svelte';
 	import { getBaseUrl } from '$lib/api';
 	import ErrorBanner from '$lib/components/ErrorBanner.svelte';
-	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	let termContainer: HTMLDivElement | undefined = $state();
-	let terminal: any = $state(null);
-	let ws: WebSocket | null = $state(null);
-	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let connected = $state(false);
 
 	onMount(async () => {
-		try {
-			const { Terminal } = await import('@xterm/xterm');
-			const { FitAddon } = await import('@xterm/addon-fit');
+		const { Terminal } = await import('@xterm/xterm');
+		const { FitAddon } = await import('@xterm/addon-fit');
 
-			const term = new Terminal({
-				fontSize: 13,
-				fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-				theme: {
-					background: '#0d1117',
-					foreground: '#e6edf3',
-					cursor: '#58a6ff',
-					selectionBackground: 'rgba(88, 166, 255, 0.3)',
-				},
-				cursorBlink: true,
-				scrollback: 5000,
-			});
+		const term = new Terminal({
+			fontSize: 13,
+			fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+			theme: {
+				background: '#0d1117',
+				foreground: '#e6edf3',
+				cursor: '#58a6ff',
+				selectionBackground: 'rgba(88, 166, 255, 0.3)',
+			},
+			cursorBlink: true,
+			scrollback: 5000,
+		});
 
-			const fitAddon = new FitAddon();
-			term.loadAddon(fitAddon);
+		const fitAddon = new FitAddon();
+		term.loadAddon(fitAddon);
 
-			if (termContainer) {
-				term.open(termContainer);
+		if (!termContainer) return;
+
+		term.open(termContainer);
+
+		// Connect WebSocket
+		const base = getBaseUrl();
+		const wsUrl = base.replace('http', 'ws') + '/api/terminal/default';
+		const socket = new WebSocket(wsUrl);
+		socket.binaryType = 'arraybuffer';
+
+		socket.onopen = () => {
+			connected = true;
+			// Fit and focus AFTER visible and connected
+			requestAnimationFrame(() => {
 				fitAddon.fit();
+				term.focus();
+				socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+			});
+		};
 
-				const resizeObserver = new ResizeObserver(() => fitAddon.fit());
-				resizeObserver.observe(termContainer);
-			}
-
-			terminal = term;
-
-			// Connect WebSocket
-			const base = getBaseUrl();
-			const wsUrl = base.replace('http', 'ws') + '/api/terminal/default';
-			const socket = new WebSocket(wsUrl);
-			socket.binaryType = 'arraybuffer';
-
-			socket.onopen = () => {
-				connected = true;
-				loading = false;
-				// Send initial size
-				const msg = JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows });
-				socket.send(msg);
-			};
-
-			socket.onmessage = (event) => {
-				if (event.data instanceof ArrayBuffer) {
-					const text = new TextDecoder().decode(event.data);
-					term.write(text);
-				} else {
-					try {
-						const data = JSON.parse(event.data);
-						if (data.type === 'output') {
-							term.write(atob(data.data));
-						} else if (data.type === 'exit') {
-							term.writeln('\r\n[Session ended]');
-							connected = false;
-						}
-					} catch {
-						term.write(event.data);
+		socket.onmessage = (event) => {
+			if (event.data instanceof ArrayBuffer) {
+				term.write(new Uint8Array(event.data));
+			} else {
+				try {
+					const data = JSON.parse(event.data);
+					if (data.type === 'exit') {
+						term.writeln('\r\n[Session ended]');
+						connected = false;
 					}
+				} catch {
+					term.write(event.data);
 				}
-			};
+			}
+		};
 
-			socket.onclose = () => {
-				connected = false;
-				term.writeln('\r\n[Disconnected]');
-			};
+		socket.onclose = () => {
+			connected = false;
+			term.writeln('\r\n[Disconnected]');
+		};
 
-			socket.onerror = () => {
-				error = 'Terminal WebSocket connection failed. Backend may not support terminal yet.';
-				loading = false;
-			};
+		socket.onerror = () => {
+			error = 'WebSocket connection failed';
+		};
 
-			ws = socket;
+		// Keyboard input -> WebSocket
+		term.onData((data: string) => {
+			if (socket.readyState === WebSocket.OPEN) {
+				socket.send(data);
+			}
+		});
 
-			// Forward input to WebSocket
-			term.onData((data: string) => {
-				if (socket.readyState === WebSocket.OPEN) {
-					socket.send(data);
-				}
-			});
+		// Resize events
+		term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
+			if (socket.readyState === WebSocket.OPEN) {
+				socket.send(JSON.stringify({ type: 'resize', cols, rows }));
+			}
+		});
 
-			term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
-				if (socket.readyState === WebSocket.OPEN) {
-					socket.send(JSON.stringify({ type: 'resize', cols, rows }));
-				}
-			});
+		// Refit on window resize
+		const resizeObserver = new ResizeObserver(() => {
+			fitAddon.fit();
+		});
+		resizeObserver.observe(termContainer);
 
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to load terminal';
-			loading = false;
-		}
+		// Focus on click
+		termContainer.addEventListener('click', () => term.focus());
 	});
 </script>
 
@@ -129,11 +119,5 @@
 		</div>
 	{/if}
 
-	{#if loading}
-		<div class="flex flex-1 items-center justify-center">
-			<LoadingSpinner />
-		</div>
-	{/if}
-
-	<div bind:this={termContainer} class="flex-1 p-3" style="display: {loading ? 'none' : 'block'}"></div>
+	<div bind:this={termContainer} class="flex-1 p-3"></div>
 </div>
