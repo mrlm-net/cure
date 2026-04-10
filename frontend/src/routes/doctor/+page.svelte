@@ -11,13 +11,19 @@
 
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	let results = $state<CheckResult[]>([]);
+	let platformChecks = $state<CheckResult[]>([]);
+	let projectChecks = $state<CheckResult[]>([]);
 
 	async function runDoctor() {
 		loading = true;
 		error = null;
 		try {
-			results = await apiFetch<CheckResult[]>('/api/doctor');
+			const [platform, project] = await Promise.all([
+				apiFetch<CheckResult[]>('/api/doctor/platform').catch(() => []),
+				apiFetch<CheckResult[]>('/api/doctor')
+			]);
+			platformChecks = platform;
+			projectChecks = project;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
@@ -31,14 +37,10 @@
 
 	function badgeClasses(status: string): string {
 		switch (status) {
-			case 'pass':
-				return 'bg-[var(--success)]/15 text-[var(--success)]';
-			case 'warn':
-				return 'bg-[var(--warning)]/15 text-[var(--warning)]';
-			case 'fail':
-				return 'bg-[var(--danger)]/15 text-[var(--danger)]';
-			default:
-				return 'bg-[var(--bg-tertiary)] text-white/50';
+			case 'pass': return 'bg-[var(--success)]/15 text-[var(--success)]';
+			case 'warn': return 'bg-[var(--warning)]/15 text-[var(--warning)]';
+			case 'fail': return 'bg-[var(--danger)]/15 text-[var(--danger)]';
+			default: return 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]';
 		}
 	}
 </script>
@@ -60,29 +62,46 @@
 	</div>
 
 	{#if loading}
-		<div class="flex items-center justify-center py-12">
-			<LoadingSpinner />
-		</div>
+		<div class="flex items-center justify-center py-12"><LoadingSpinner /></div>
 	{:else if error}
 		<ErrorBanner message={error} onDismiss={() => (error = null)} />
-	{:else if results.length === 0}
-		<p class="py-8 text-center text-sm text-[var(--text-secondary)]">No checks returned</p>
 	{:else}
-		<div class="space-y-2">
-			{#each results as check (check.name)}
-				<div class="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3">
-					<div class="min-w-0 flex-1">
-						<p class="text-sm font-medium text-[var(--text-primary)]">{check.name}</p>
-						<p class="mt-0.5 text-xs text-[var(--text-secondary)]">{check.message}</p>
-					</div>
-					<span
-						class="ml-3 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium {badgeClasses(check.status)}"
-						aria-label="{check.status} status"
-					>
-						{check.status}
-					</span>
+		<!-- Platform / Control Plane -->
+		{#if platformChecks.length > 0}
+			<div>
+				<h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Platform</h2>
+				<div class="space-y-2">
+					{#each platformChecks as check (check.name)}
+						<div class="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3">
+							<div>
+								<p class="text-sm font-medium text-[var(--text-primary)]">{check.name}</p>
+								<p class="mt-0.5 text-xs text-[var(--text-secondary)]">{check.message}</p>
+							</div>
+							<span class="ml-3 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium {badgeClasses(check.status)}">{check.status}</span>
+						</div>
+					{/each}
 				</div>
-			{/each}
+			</div>
+		{/if}
+
+		<!-- Project checks -->
+		<div>
+			<h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Project</h2>
+			{#if projectChecks.length === 0}
+				<p class="py-4 text-center text-sm text-[var(--text-secondary)]">No project checks returned</p>
+			{:else}
+				<div class="space-y-2">
+					{#each projectChecks as check (check.name)}
+						<div class="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3">
+							<div>
+								<p class="text-sm font-medium text-[var(--text-primary)]">{check.name}</p>
+								<p class="mt-0.5 text-xs text-[var(--text-secondary)]">{check.message}</p>
+							</div>
+							<span class="ml-3 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium {badgeClasses(check.status)}">{check.status}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>

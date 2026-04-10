@@ -30,6 +30,7 @@ type Session struct {
 	WorkItems   []string `json:"work_items,omitempty"`    // linked issue/ticket IDs
 	AgentRole   string   `json:"agent_role,omitempty"`    // e.g., "build", "review", "test"
 	ContainerID string   `json:"container_id,omitempty"` // Docker container ID if orchestrated
+	Mode        string   `json:"mode,omitempty"`         // "interactive" or "autonomous"
 }
 
 // NewSession creates a new Session for the given provider and model.
@@ -93,6 +94,7 @@ func (s *Session) Fork() *Session {
 		WorkItems:    workItems,
 		AgentRole:    s.AgentRole,
 		ContainerID:  "", // forked sessions are not in the same container
+		Mode:         s.Mode,
 	}
 }
 

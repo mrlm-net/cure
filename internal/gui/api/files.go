@@ -153,6 +153,23 @@ func fileWriteHandler(projectRoots []string) http.HandlerFunc {
 	}
 }
 
+// fileRootsHandler returns the list of project repo roots for the editor.
+func fileRootsHandler(roots []string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		type rootEntry struct {
+			Path string `json:"path"`
+			Name string `json:"name"`
+		}
+		entries := make([]rootEntry, 0, len(roots))
+		for _, r := range roots {
+			name := filepath.Base(r)
+			entries = append(entries, rootEntry{Path: r, Name: name})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(entries)
+	}
+}
+
 // isWithinRoots checks that path is within at least one allowed root.
 func isWithinRoots(path string, roots []string) bool {
 	if len(roots) == 0 {

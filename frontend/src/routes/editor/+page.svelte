@@ -44,6 +44,13 @@
 		size: number;
 	}
 
+	interface RepoRoot {
+		path: string;
+		name: string;
+	}
+
+	let roots = $state<RepoRoot[]>([]);
+	let currentRoot = $state('');
 	let currentPath = $state('');
 	let currentFile = $state('');
 	let fileContent = $state('');
@@ -137,8 +144,20 @@
 		}
 	}
 
+	async function fetchRoots(): Promise<void> {
+		try {
+			roots = await apiFetch<RepoRoot[]>('/api/files/roots');
+			if (roots.length > 0) {
+				currentRoot = roots[0].path;
+				await fetchFiles(roots[0].path);
+			}
+		} catch {
+			await fetchFiles('.');
+		}
+	}
+
 	$effect(() => {
-		fetchFiles('.');
+		fetchRoots();
 	});
 </script>
 
@@ -151,7 +170,20 @@
 <div class="-m-6 flex h-[calc(100vh-3.5rem)] md:h-screen">
 	<!-- File browser -->
 	<div class="w-56 shrink-0 overflow-y-auto border-l border-r border-[var(--border)] bg-[var(--bg-secondary)] p-2">
-		<div class="mb-2 border-b border-[var(--border)] px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Files</div>
+		{#if roots.length > 1}
+			<select
+				bind:value={currentRoot}
+				onchange={() => fetchFiles(currentRoot)}
+				class="mb-2 w-full rounded border border-[var(--border)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]"
+			>
+				{#each roots as r}
+					<option value={r.path}>{r.name}</option>
+				{/each}
+			</select>
+		{/if}
+		<div class="mb-2 border-b border-[var(--border)] px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+			{roots.length > 0 ? (roots.find(r => r.path === currentRoot)?.name ?? 'Files') : 'Files'}
+		</div>
 		{#if currentPath && currentPath !== '.'}
 			<button onclick={goUp} class="mb-1 flex w-full items-center gap-1 rounded px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]">
 				..

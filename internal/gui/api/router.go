@@ -54,6 +54,7 @@ func NewAPIRouter(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/health", healthHandler(deps.Port))
 	mux.HandleFunc("GET /api/config", configHandler(deps.Config))
 	mux.HandleFunc("GET /api/doctor", doctorHandler(deps.Checks))
+	mux.HandleFunc("GET /api/doctor/platform", doctorHandler(doctor.ControlPlaneChecks()))
 	mux.HandleFunc("GET /api/generate/list", generateListHandler())
 	mux.HandleFunc("POST /api/generate/{template}", generateRunHandler())
 
@@ -84,6 +85,7 @@ func NewAPIRouter(deps Deps) http.Handler {
 	mux.HandleFunc("PUT /api/config", configUpdateHandler())
 
 	// File API (scoped to project roots)
+	mux.HandleFunc("GET /api/files/roots", fileRootsHandler(deps.ProjectRoots))
 	mux.HandleFunc("GET /api/files", filesListHandler(deps.ProjectRoots))
 	mux.HandleFunc("GET /api/files/{path...}", fileReadHandler(deps.ProjectRoots))
 	mux.HandleFunc("PUT /api/files/{path...}", fileWriteHandler(deps.ProjectRoots))
