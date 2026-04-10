@@ -1,0 +1,52 @@
+## Security Scan: PR #143 — Session tags (context new/list)
+
+**Scan date:** 2026-03-28
+
+### Findings
+
+#### LOW — A03 Injection: Tag values have no length or control-character validation
+
+**File:** `internal/commands/context/new.go` — `stringSliceFlag.Set`
+**CWE:** CWE-20 (Improper Input Validation)
+
+Tags are rejected only when empty. There is no maximum length constraint and no rejection of control characters (newlines, null bytes). Current risk is low because tags are stored as JSON-encoded strings (special characters are escaped) and filtered by exact string equality. However:
+
+1. A tag containing a newline (e.g. `"\n# injected"`) would appear as a valid JSON string in NDJSON export output. Downstream tools that split NDJSON naively on raw newlines could be confused.
+2. Tags are displayed in a fixed-width terminal table; a 10,000-character tag would break the table rendering (cosmetic).
+
+**Recommended fix:**
+```go
+func (f *stringSliceFlag) Set(v string) error {
+    if v == "" {
+        return fmt.Errorf("tag value cannot be empty")
+    }
+    if len(v) > 128 {
+        return fmt.Errorf("tag value too long (max 128 characters)")
+    }
+    for _, c := range v {
+        if c < 0x20 {
+            return fmt.Errorf("tag value contains control character")
+        }
+    }
+    *f = append(*f, v)
+    return nil
+}
+```
+
+---
+
+#### INFO — Tag filter uses exact string equality — no regex injection risk
+
+`t == c.tagFilter` (line 78 in list.go) is plain string equality. No regex evaluation, no SQL, no shell execution. No injection risk.
+
+---
+
+### OWASP Status
+
+| Category | Status | Notes |
+|----------|--------|-------|
+| A03 Injection | WARN | Tag control-char validation missing — LOW finding |
+| A01 Broken Access Control | PASS | No access control surface |
+| All others | PASS | No surface in this PR |
+
+Full report: `docs/security-assessment-v09x-v10x.md`
