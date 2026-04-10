@@ -121,7 +121,7 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 	if c.projectStore != nil && projectName != "" {
 		if p, err := c.projectStore.Load(projectName); err == nil {
 			for _, r := range p.Repos {
-				projectRoots = append(projectRoots, r.Path)
+				projectRoots = append(projectRoots, r.EffectivePath())
 			}
 		}
 	}

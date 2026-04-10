@@ -27,6 +27,7 @@ func NewProjectCommand(store *project.Store) terminal.Command {
 	router.Register(&initCommand{store: store})
 	router.Register(&listCommand{store: store})
 	router.Register(&showCommand{store: store})
+	router.Register(&cloneCommand{store: store})
 	return router
 }
 
@@ -210,4 +211,56 @@ func (c *showCommand) Run(_ context.Context, tc *terminal.Context) error {
 	enc := json.NewEncoder(tc.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(p)
+}
+
+// --- clone subcommand ---
+
+type cloneCommand struct {
+	store *project.Store
+}
+
+func (c *cloneCommand) Name() string        { return "clone" }
+func (c *cloneCommand) Description() string { return "Clone project repos into cure workdir" }
+func (c *cloneCommand) Usage() string       { return "Usage: cure project clone <name>" }
+func (c *cloneCommand) Flags() *flag.FlagSet {
+	return flag.NewFlagSet("clone", flag.ContinueOnError)
+}
+
+func (c *cloneCommand) Run(_ context.Context, tc *terminal.Context) error {
+	if len(tc.Args) == 0 {
+		return fmt.Errorf("project name required")
+	}
+	name := tc.Args[0]
+
+	p, err := c.store.Load(name)
+	if err != nil {
+		return fmt.Errorf("failed to load project %q: %w", name, err)
+	}
+
+	cfg, err := project.LoadGlobalConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load global config: %w", err)
+	}
+
+	for i := range p.Repos {
+		r := &p.Repos[i]
+		if r.Remote == "" {
+			fmt.Fprintf(tc.Stdout, "  - %s — no remote, skipping\n", r.Path)
+			continue
+		}
+		fmt.Fprintf(tc.Stdout, "  Cloning %s...\n", r.Remote)
+		if err := project.CloneRepo(r, cfg.WorkDir, p.Name); err != nil {
+			fmt.Fprintf(tc.Stdout, "  ! %s — %v\n", r.Remote, err)
+			continue
+		}
+		fmt.Fprintf(tc.Stdout, "  + %s → %s\n", r.Remote, r.LocalPath)
+	}
+
+	// Save updated project with LocalPath values
+	if err := c.store.Save(p); err != nil {
+		return fmt.Errorf("failed to save project: %w", err)
+	}
+
+	fmt.Fprintf(tc.Stdout, "\nProject %q updated with local paths.\n", name)
+	return nil
 }

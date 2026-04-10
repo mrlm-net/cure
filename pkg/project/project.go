@@ -30,6 +30,12 @@ type Repo struct {
 	Path          string `json:"path"`
 	Remote        string `json:"remote,omitempty"`
 	DefaultBranch string `json:"default_branch,omitempty"`
+	LocalPath     string `json:"local_path,omitempty"` // cure-managed clone in workdir
+}
+
+// GlobalConfig holds cure-level user configuration stored at ~/.cure/config.json.
+type GlobalConfig struct {
+	WorkDir string `json:"workdir,omitempty"` // cure-managed working directory (default ~/.cure/workdir)
 }
 
 // Defaults contains default configuration values for the project.
