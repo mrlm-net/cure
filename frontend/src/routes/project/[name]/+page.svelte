@@ -24,7 +24,7 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let saving = $state(false);
-	let tab = $state<'dashboard' | 'sessions' | 'config'>('dashboard');
+	let tab = $state<'dashboard' | 'sessions' | 'editor' | 'terminal' | 'config'>('dashboard');
 	let dirty = $derived(projectJson !== originalJson);
 
 	const projectData = $derived.by(() => {
@@ -121,6 +121,20 @@
 					{tab === 'sessions' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
 			>
 				Sessions ({sessions.length})
+			</button>
+			<button
+				onclick={() => (tab = 'editor')}
+				class="px-4 py-2 text-sm font-medium border-b-2 transition-colors
+					{tab === 'editor' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+			>
+				Editor
+			</button>
+			<button
+				onclick={() => (tab = 'terminal')}
+				class="px-4 py-2 text-sm font-medium border-b-2 transition-colors
+					{tab === 'terminal' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+			>
+				Terminal
 			</button>
 			<button
 				onclick={() => (tab = 'config')}
@@ -266,6 +280,23 @@
 		{/if}
 
 		<!-- Config tab (editable JSON) -->
+		<!-- Editor tab -->
+		{#if tab === 'editor'}
+			<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4 text-center">
+				<a href="/editor" class="text-[var(--accent)] hover:underline text-sm">Open Editor</a>
+				<p class="mt-1 text-xs text-[var(--text-tertiary)]">File browser scoped to this project's repositories</p>
+			</div>
+		{/if}
+
+		<!-- Terminal tab -->
+		{#if tab === 'terminal'}
+			<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4 text-center">
+				<a href="/terminal" class="text-[var(--accent)] hover:underline text-sm">Open Terminal</a>
+				<p class="mt-1 text-xs text-[var(--text-tertiary)]">Shell session in this project's working directory</p>
+			</div>
+		{/if}
+
+		<!-- Config tab -->
 		{#if tab === 'config'}
 			<div class="space-y-3">
 				<div class="flex items-center justify-between">
