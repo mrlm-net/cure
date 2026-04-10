@@ -294,8 +294,9 @@
 		{/if}
 
 		<!-- Config tab -->
-		{#if tab === 'config'}
-			<div class="space-y-3">
+		{#if tab === 'config' && projectData}
+			{@const pd = projectData}
+			<div class="space-y-4">
 				<div class="flex items-center justify-between">
 					<span class="text-xs text-[var(--text-tertiary)]">~/.cure/projects/{projectName}/project.json</span>
 					<div class="flex gap-2">
@@ -317,9 +318,80 @@
 					</div>
 				</div>
 
-				<textarea
-					bind:value={projectJson}
-					class="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-4 font-mono text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
+				<!-- Structured form -->
+				<section class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
+					<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">General</h3>
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div>
+							<label class="block mb-1 text-sm text-[var(--text-secondary)]">Description</label>
+							<input value={pd.description ?? ''} oninput={(e) => { pd.description = e.currentTarget.value; projectJson = JSON.stringify(pd, null, 2); }}
+								class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none" />
+						</div>
+					</div>
+				</section>
+
+				<section class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
+					<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">AI Provider</h3>
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div>
+							<label class="block mb-1 text-sm text-[var(--text-secondary)]">Provider</label>
+							<select value={pd.defaults?.provider ?? ''} onchange={(e) => { if (!pd.defaults) pd.defaults = {}; pd.defaults.provider = e.currentTarget.value; projectJson = JSON.stringify(pd, null, 2); }}
+								class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none">
+								<option value="claude-code">Claude Code (CLI)</option>
+								<option value="claude">Claude (API)</option>
+								<option value="openai">OpenAI</option>
+								<option value="gemini">Gemini</option>
+							</select>
+						</div>
+						<div>
+							<label class="block mb-1 text-sm text-[var(--text-secondary)]">Model</label>
+							<input value={pd.defaults?.model ?? ''} oninput={(e) => { if (!pd.defaults) pd.defaults = {}; pd.defaults.model = e.currentTarget.value; projectJson = JSON.stringify(pd, null, 2); }}
+								class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 font-mono text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none" />
+						</div>
+						<div>
+							<label class="block mb-1 text-sm text-[var(--text-secondary)]">Max Turns</label>
+							<input type="number" value={pd.defaults?.max_turns ?? ''} oninput={(e) => { if (!pd.defaults) pd.defaults = {}; pd.defaults.max_turns = parseInt(e.currentTarget.value) || 0; projectJson = JSON.stringify(pd, null, 2); }}
+								class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none" />
+						</div>
+						<div>
+							<label class="block mb-1 text-sm text-[var(--text-secondary)]">Max Budget (USD)</label>
+							<input type="number" step="0.01" value={pd.defaults?.max_budget_usd ?? ''} oninput={(e) => { if (!pd.defaults) pd.defaults = {}; pd.defaults.max_budget_usd = parseFloat(e.currentTarget.value) || 0; projectJson = JSON.stringify(pd, null, 2); }}
+								class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none" />
+						</div>
+					</div>
+				</section>
+
+				<section class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
+					<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Tracker</h3>
+					<div class="grid gap-4 sm:grid-cols-3">
+						<div>
+							<label class="block mb-1 text-sm text-[var(--text-secondary)]">Type</label>
+							<select value={pd.defaults?.tracker?.type ?? ''} onchange={(e) => { if (!pd.defaults) pd.defaults = {}; if (!pd.defaults.tracker) pd.defaults.tracker = {}; pd.defaults.tracker.type = e.currentTarget.value; projectJson = JSON.stringify(pd, null, 2); }}
+								class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none">
+								<option value="">None</option>
+								<option value="github">GitHub Issues</option>
+								<option value="azdo">Azure DevOps</option>
+							</select>
+						</div>
+						<div>
+							<label class="block mb-1 text-sm text-[var(--text-secondary)]">Owner</label>
+							<input value={pd.defaults?.tracker?.owner ?? ''} oninput={(e) => { if (!pd.defaults?.tracker) { if (!pd.defaults) pd.defaults = {}; pd.defaults.tracker = {}; } pd.defaults.tracker.owner = e.currentTarget.value; projectJson = JSON.stringify(pd, null, 2); }}
+								class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none" />
+						</div>
+						<div>
+							<label class="block mb-1 text-sm text-[var(--text-secondary)]">Repo</label>
+							<input value={pd.defaults?.tracker?.repo ?? ''} oninput={(e) => { if (!pd.defaults?.tracker) { if (!pd.defaults) pd.defaults = {}; pd.defaults.tracker = {}; } pd.defaults.tracker.repo = e.currentTarget.value; projectJson = JSON.stringify(pd, null, 2); }}
+								class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none" />
+						</div>
+					</div>
+				</section>
+
+				<!-- Advanced: raw JSON -->
+				<details class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)]">
+					<summary class="cursor-pointer px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Advanced (raw JSON)</summary>
+					<textarea
+						bind:value={projectJson}
+						class="w-full rounded-b-lg border-0 border-t border-[var(--border)] bg-[var(--bg-primary)] p-4 font-mono text-sm text-[var(--text-primary)] focus:outline-none"
 					rows={25}
 					spellcheck="false"
 				></textarea>

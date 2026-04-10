@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/mrlm-net/cure/pkg/agent"
@@ -40,6 +41,10 @@ type Deps struct {
 	// ProjectStore is the project persistence layer. When nil, project
 	// endpoints return 501 Not Implemented.
 	ProjectStore project.ProjectStore
+
+	// Notifier dispatches notifications to configured channels.
+	// When nil, notifications are disabled.
+	Notifier Notifier
 
 	// ProjectRoots are the allowed file API root directories (from project repos).
 	ProjectRoots []string
@@ -96,6 +101,11 @@ func NewAPIRouter(deps Deps) http.Handler {
 	mux.HandleFunc("PUT /api/files/{path...}", fileWriteHandler(deps.ProjectRoots))
 
 	return mux
+}
+
+// Notifier is the interface for dispatching notifications from the GUI.
+type Notifier interface {
+	Notify(ctx context.Context, sessionID, sessionName, projectName, summary string) error
 }
 
 // configString extracts a dot-notation string value from ConfigObject.

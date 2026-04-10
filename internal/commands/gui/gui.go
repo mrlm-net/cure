@@ -15,6 +15,8 @@ import (
 	"github.com/mrlm-net/cure/internal/gui"
 	"github.com/mrlm-net/cure/internal/gui/api"
 	"github.com/mrlm-net/cure/internal/gui/ws"
+	localnotify "github.com/mrlm-net/cure/internal/notifications/local"
+	"github.com/mrlm-net/cure/pkg/notify"
 	"github.com/mrlm-net/cure/pkg/agent"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/doctor"
@@ -170,6 +172,9 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 		}
 	}
 
+	// Set up notification dispatcher with OS local channel
+	dispatcher := notify.NewDispatcher(&localnotify.Channel{})
+
 	deps := api.Deps{
 		Config:       c.cfgData,
 		Checks:       c.checks,
@@ -179,6 +184,7 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 		ProjectStore: c.projectStore,
 		ProjectName:  projectName,
 		ProjectRoots: projectRoots,
+		Notifier:     api.NewNotifier(dispatcher),
 	}
 
 	apiRouter := api.NewAPIRouter(deps)
