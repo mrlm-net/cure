@@ -99,21 +99,23 @@ func makeAgentRun(cfgData config.ConfigObject) api.AgentRunFunc {
 			sess.SystemPrompt = v
 		}
 
-		// Try providers in order: explicit provider > claude API > claude-code CLI
+		// Try providers: explicit > claude-code CLI (default) > claude API > others
 		var a agent.Agent
 		var err error
 
-		if provider == "claude" || provider == "" {
+		switch provider {
+		case "claude":
 			a, err = agent.New("claude", agentCfg)
-		}
-		if (a == nil || err != nil) && (provider == "claude-code" || provider == "") {
-			a, err = agent.New("claude-code", agentCfg)
-		}
-		if (a == nil || err != nil) && provider == "openai" {
+		case "openai":
 			a, err = agent.New("openai", agentCfg)
-		}
-		if (a == nil || err != nil) && provider == "gemini" {
+		case "gemini":
 			a, err = agent.New("gemini", agentCfg)
+		default:
+			// Default: claude-code CLI first (works with subscription), fall back to API
+			a, err = agent.New("claude-code", agentCfg)
+			if a == nil || err != nil {
+				a, err = agent.New("claude", agentCfg)
+			}
 		}
 
 		if a == nil || err != nil {
