@@ -106,16 +106,14 @@ func makeAgentRun(cfgData config.ConfigObject) api.AgentRunFunc {
 		switch provider {
 		case "claude":
 			a, err = agent.New("claude", agentCfg)
+		case "claude-code", "":
+			a, err = agent.New("claude-code", agentCfg)
 		case "openai":
 			a, err = agent.New("openai", agentCfg)
 		case "gemini":
 			a, err = agent.New("gemini", agentCfg)
 		default:
-			// Default: claude-code CLI first (works with subscription), fall back to API
 			a, err = agent.New("claude-code", agentCfg)
-			if a == nil || err != nil {
-				a, err = agent.New("claude", agentCfg)
-			}
 		}
 
 		if a == nil || err != nil {
