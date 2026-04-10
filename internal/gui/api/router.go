@@ -84,6 +84,10 @@ func NewAPIRouter(deps Deps) http.Handler {
 	// Config update API
 	mux.HandleFunc("PUT /api/config", configUpdateHandler())
 
+	// Global settings API (form-friendly)
+	mux.HandleFunc("GET /api/settings", settingsGetHandler())
+	mux.HandleFunc("PUT /api/settings", settingsPutHandler())
+
 	// File API (scoped to project roots)
 	mux.HandleFunc("GET /api/editor/roots", fileRootsHandler(deps.ProjectRoots))
 	mux.HandleFunc("GET /api/files", filesListHandler(deps.ProjectRoots))
