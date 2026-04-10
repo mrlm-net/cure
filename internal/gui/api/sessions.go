@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"os/exec"
+	"strings"
 
 	"github.com/mrlm-net/cure/pkg/agent"
 )
@@ -58,6 +61,18 @@ func sessionsCreateHandler(store agent.SessionStore, cfg configDefaults, project
 		} else {
 			sess.ProjectName = projectName
 		}
+
+		// Auto-populate git context
+		if cwd, err := os.Getwd(); err == nil {
+			if branch, err := gitCurrentBranch(cwd); err == nil {
+				sess.BranchName = branch
+			}
+			if dirty, err := gitIsDirty(cwd); err == nil {
+				sess.GitDirty = dirty
+			}
+			sess.RepoName = repoNameFromCwd(cwd)
+		}
+
 		if err := store.Save(r.Context(), sess); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to save session")
 			return
@@ -180,4 +195,32 @@ func writeError(w http.ResponseWriter, status int, message string) {
 type configDefaults struct {
 	defaultProvider string
 	defaultModel    string
+}
+
+func gitCurrentBranch(dir string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func gitIsDirty(dir string) (bool, error) {
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(out)) != "", nil
+}
+
+func repoNameFromCwd(cwd string) string {
+	parts := strings.Split(cwd, "/")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return cwd
 }

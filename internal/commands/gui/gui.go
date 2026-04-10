@@ -6,6 +6,7 @@ package guicmd
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -68,23 +69,61 @@ func (c *GUICommand) Flags() *flag.FlagSet {
 	return fs
 }
 
+// makeAgentRun creates an AgentRunFunc that assembles CC CLI flags from
+// the merged config on each session run. The agent is created per-session
+// so project-level overrides (model, max_turns, budget, permission_mode)
+// take effect without restarting the GUI server.
 func makeAgentRun(cfgData config.ConfigObject) api.AgentRunFunc {
-	model, _ := cfgData["agent.claude.model"].(string)
-	if model == "" {
-		model = "claude-sonnet-4-6"
-	}
-
-	// Try API direct first, then Claude Code CLI (unified adapter with streaming + tool events)
-	a, err := agent.New("claude", map[string]any{"model": model})
-	if err != nil {
-		a, err = agent.New("claude-code", map[string]any{"model": model})
-	}
-	if err != nil {
-		return nil
-	}
-
 	return func(ctx context.Context, sess *agent.Session) <-chan api.AgentResult {
 		ch := make(chan api.AgentResult, 16)
+
+		// Assemble config from merged layers (includes project overrides)
+		model, _ := cfgData["agent.claude.model"].(string)
+		if model == "" {
+			model = "claude-sonnet-4-6"
+		}
+		provider, _ := cfgData["agent.provider"].(string)
+
+		agentCfg := map[string]any{"model": model}
+
+		// Pass project-level settings to the adapter
+		if v, ok := cfgData["agent.max_turns"]; ok {
+			agentCfg["max_turns"] = v
+		}
+		if v, ok := cfgData["agent.max_budget_usd"]; ok {
+			agentCfg["max_budget_usd"] = v
+		}
+		if v, ok := cfgData["agent.system_prompt"].(string); ok && v != "" && sess.SystemPrompt == "" {
+			sess.SystemPrompt = v
+		}
+
+		// Try providers in order: explicit provider > claude API > claude-code CLI
+		var a agent.Agent
+		var err error
+
+		if provider == "claude" || provider == "" {
+			a, err = agent.New("claude", agentCfg)
+		}
+		if (a == nil || err != nil) && (provider == "claude-code" || provider == "") {
+			a, err = agent.New("claude-code", agentCfg)
+		}
+		if (a == nil || err != nil) && provider == "openai" {
+			a, err = agent.New("openai", agentCfg)
+		}
+		if (a == nil || err != nil) && provider == "gemini" {
+			a, err = agent.New("gemini", agentCfg)
+		}
+
+		if a == nil || err != nil {
+			go func() {
+				defer close(ch)
+				ch <- api.AgentResult{
+					Err: fmt.Errorf("no AI provider available: %v", err),
+				}
+			}()
+			return ch
+		}
+
 		go func() {
 			defer close(ch)
 			for ev, err := range a.Run(ctx, sess) {
