@@ -106,6 +106,8 @@ func NewAPIRouter(deps Deps) http.Handler {
 	// Orchestration API
 	mux.HandleFunc("GET /api/orchestrate/status", orchestrateStatusHandler())
 	mux.HandleFunc("POST /api/orchestrate/init", orchestrateInitHandler(deps.ProjectStore, deps.ProjectName))
+	mux.HandleFunc("POST /api/orchestrate/up", orchestrateUpHandler(deps.ProjectStore, deps.ProjectName))
+	mux.HandleFunc("POST /api/orchestrate/down", orchestrateDownHandler(deps.ProjectStore, deps.ProjectName))
 
 	// File API (scoped to project roots)
 	mux.HandleFunc("GET /api/editor/roots", fileRootsHandler(deps.ProjectRoots))

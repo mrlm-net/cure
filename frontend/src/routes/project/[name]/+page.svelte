@@ -25,6 +25,7 @@
 	let error = $state<string | null>(null);
 	let saving = $state(false);
 	let tab = $state<'dashboard' | 'sessions' | 'tools' | 'config'>('dashboard');
+	let orchStatus = $state('');
 	let dirty = $derived(projectJson !== originalJson);
 
 	const projectData = $derived.by(() => {
@@ -297,21 +298,65 @@
 				<section class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
 					<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Agent Orchestration</h3>
 					<p class="mb-3 text-xs text-[var(--text-tertiary)]">Manage isolated agent containers for this project. Requires Docker.</p>
-					<div class="flex gap-2">
+					<div class="flex flex-wrap gap-2">
 						<button
 							onclick={async () => {
 								try {
-									await apiFetch('/api/orchestrate/init', { method: 'POST' });
-									alert('docker-compose.cure.yml generated');
+									const res = await apiFetch<{status: string, message?: string}>('/api/orchestrate/init', { method: 'POST' });
+									orchStatus = 'initialized';
 								} catch (e) {
 									error = e instanceof Error ? e.message : 'Init failed';
 								}
 							}}
-							class="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs text-white hover:opacity-90"
+							class="rounded-md bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]/80"
 						>
-							Initialize Containers
+							Initialize
+						</button>
+						<button
+							onclick={async () => {
+								orchStatus = 'starting...';
+								try {
+									await apiFetch('/api/orchestrate/up', { method: 'POST' });
+									orchStatus = 'running';
+								} catch (e) {
+									error = e instanceof Error ? e.message : 'Start failed';
+									orchStatus = 'error';
+								}
+							}}
+							class="rounded-md bg-[var(--success)] px-3 py-1.5 text-xs text-white hover:opacity-90"
+						>
+							Start
+						</button>
+						<button
+							onclick={async () => {
+								try {
+									await apiFetch('/api/orchestrate/down', { method: 'POST' });
+									orchStatus = 'stopped';
+								} catch (e) {
+									error = e instanceof Error ? e.message : 'Stop failed';
+								}
+							}}
+							class="rounded-md bg-[var(--danger)] px-3 py-1.5 text-xs text-white hover:opacity-90"
+						>
+							Stop
+						</button>
+						<button
+							onclick={async () => {
+								try {
+									const statuses = await apiFetch<any[]>('/api/orchestrate/status');
+									orchStatus = statuses.length > 0 ? `${statuses.length} container(s)` : 'no containers';
+								} catch {
+									orchStatus = 'unknown';
+								}
+							}}
+							class="rounded-md bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+						>
+							Status
 						</button>
 					</div>
+					{#if orchStatus}
+						<p class="mt-2 text-xs text-[var(--text-secondary)]">Status: {orchStatus}</p>
+					{/if}
 				</section>
 			</div>
 		{/if}
