@@ -159,13 +159,13 @@ func TestMessagesSSE_CustomAgentRun(t *testing.T) {
 	_ = store.Save(context.Background(), sess)
 
 	// Custom run function that emits a fixed token.
-	customRun := func(ctx context.Context, session *agent.Session) <-chan agentResult {
-		ch := make(chan agentResult, 4)
+	customRun := func(ctx context.Context, session *agent.Session) <-chan AgentResult {
+		ch := make(chan AgentResult, 4)
 		go func() {
 			defer close(ch)
-			ch <- agentResult{Event: agent.Event{Kind: agent.EventKindStart}}
-			ch <- agentResult{Event: agent.Event{Kind: agent.EventKindToken, Text: "custom-response"}}
-			ch <- agentResult{Event: agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"}}
+			ch <- AgentResult{Event: agent.Event{Kind: agent.EventKindStart}}
+			ch <- AgentResult{Event: agent.Event{Kind: agent.EventKindToken, Text: "custom-response"}}
+			ch <- AgentResult{Event: agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"}}
 		}()
 		return ch
 	}
@@ -202,12 +202,12 @@ func TestMessagesSSE_ErrorEvent(t *testing.T) {
 	_ = store.Save(context.Background(), sess)
 
 	// Agent that emits start then an error.
-	errRun := func(ctx context.Context, session *agent.Session) <-chan agentResult {
-		ch := make(chan agentResult, 4)
+	errRun := func(ctx context.Context, session *agent.Session) <-chan AgentResult {
+		ch := make(chan AgentResult, 4)
 		go func() {
 			defer close(ch)
-			ch <- agentResult{Event: agent.Event{Kind: agent.EventKindStart}}
-			ch <- agentResult{Event: agent.Event{Kind: agent.EventKindError, Err: "provider failure"}}
+			ch <- AgentResult{Event: agent.Event{Kind: agent.EventKindStart}}
+			ch <- AgentResult{Event: agent.Event{Kind: agent.EventKindError, Err: "provider failure"}}
 		}()
 		return ch
 	}

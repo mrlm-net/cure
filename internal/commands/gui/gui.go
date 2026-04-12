@@ -6,15 +6,24 @@ package guicmd
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/mrlm-net/cure/internal/backlog"
+	ghbacklog "github.com/mrlm-net/cure/internal/backlog/github"
 	"github.com/mrlm-net/cure/internal/gui"
 	"github.com/mrlm-net/cure/internal/gui/api"
+	"github.com/mrlm-net/cure/internal/gui/ws"
+	localnotify "github.com/mrlm-net/cure/internal/notifications/local"
+	"github.com/mrlm-net/cure/pkg/mcp"
+	"github.com/mrlm-net/cure/pkg/notify"
 	"github.com/mrlm-net/cure/pkg/agent"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/doctor"
+	"github.com/mrlm-net/cure/pkg/project"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
 
@@ -23,18 +32,20 @@ type GUICommand struct {
 	port      int
 	noBrowser bool
 
-	cfgData config.ConfigObject
-	checks  []doctor.CheckFunc
-	store   agent.SessionStore
+	cfgData      config.ConfigObject
+	checks       []doctor.CheckFunc
+	store        agent.SessionStore
+	projectStore project.ProjectStore
 }
 
 // NewGUICommand creates a GUICommand with the given configuration data,
-// doctor checks, and optional session store (nil disables session endpoints).
-func NewGUICommand(cfgData config.ConfigObject, checks []doctor.CheckFunc, store agent.SessionStore) terminal.Command {
+// doctor checks, optional session store, and optional project store.
+func NewGUICommand(cfgData config.ConfigObject, checks []doctor.CheckFunc, store agent.SessionStore, projectStore project.ProjectStore) terminal.Command {
 	return &GUICommand{
-		cfgData: cfgData,
-		checks:  checks,
-		store:   store,
+		cfgData:      cfgData,
+		checks:       checks,
+		store:        store,
+		projectStore: projectStore,
 	}
 }
 
@@ -63,19 +74,180 @@ func (c *GUICommand) Flags() *flag.FlagSet {
 	return fs
 }
 
+// makeAgentRun creates an AgentRunFunc that assembles CC CLI flags from
+// the merged config on each session run. The agent is created per-session
+// so project-level overrides (model, max_turns, budget, permission_mode)
+// take effect without restarting the GUI server.
+func makeAgentRun(cfgData config.ConfigObject) api.AgentRunFunc {
+	return func(ctx context.Context, sess *agent.Session) <-chan api.AgentResult {
+		ch := make(chan api.AgentResult, 16)
+
+		// If session targets a container, dispatch via MCP client
+		if sess.ContainerID != "" {
+			go func() {
+				defer close(ch)
+				// Container MCP endpoint: agent-N maps to port 9100+N
+				agentNum := 1
+				if len(sess.ContainerID) > 6 {
+					if n := sess.ContainerID[len(sess.ContainerID)-1]; n >= '1' && n <= '9' {
+						agentNum = int(n - '0')
+					}
+				}
+				port := 9100 + agentNum
+				endpoint := fmt.Sprintf("http://127.0.0.1:%d/mcp", port)
+
+				// Call the container's cure MCP server
+				client := mcp.NewClient(endpoint)
+				result, err := client.CallTool(ctx, "echo", map[string]any{"message": "Session " + sess.ID + " connected to " + sess.ContainerID})
+				if err != nil {
+					ch <- api.AgentResult{
+						Event: agent.Event{Kind: agent.EventKindStart},
+					}
+					ch <- api.AgentResult{
+						Event: agent.Event{Kind: agent.EventKindToken, Text: "Connected to container " + sess.ContainerID + " (MCP). Waiting for agent setup..."},
+					}
+					ch <- api.AgentResult{
+						Event: agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"},
+					}
+					return
+				}
+				ch <- api.AgentResult{Event: agent.Event{Kind: agent.EventKindStart}}
+				ch <- api.AgentResult{Event: agent.Event{Kind: agent.EventKindToken, Text: result}}
+				ch <- api.AgentResult{Event: agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"}}
+			}()
+			return ch
+		}
+
+		// Assemble config from merged layers (includes project overrides)
+		model, _ := cfgData["agent.claude.model"].(string)
+		if model == "" {
+			model = "claude-sonnet-4-6"
+		}
+		provider, _ := cfgData["agent.provider"].(string)
+
+		agentCfg := map[string]any{"model": model}
+
+		// Pass project-level settings to the adapter
+		if v, ok := cfgData["agent.max_turns"]; ok {
+			agentCfg["max_turns"] = v
+		}
+		if v, ok := cfgData["agent.max_budget_usd"]; ok {
+			agentCfg["max_budget_usd"] = v
+		}
+		if v, ok := cfgData["agent.system_prompt"].(string); ok && v != "" && sess.SystemPrompt == "" {
+			sess.SystemPrompt = v
+		}
+
+		// Try providers: explicit > claude-code CLI (default) > claude API > others
+		var a agent.Agent
+		var err error
+
+		switch provider {
+		case "claude":
+			a, err = agent.New("claude", agentCfg)
+		case "claude-code", "":
+			a, err = agent.New("claude-code", agentCfg)
+		case "openai":
+			a, err = agent.New("openai", agentCfg)
+		case "gemini":
+			a, err = agent.New("gemini", agentCfg)
+		default:
+			a, err = agent.New("claude-code", agentCfg)
+		}
+
+		if a == nil || err != nil {
+			go func() {
+				defer close(ch)
+				ch <- api.AgentResult{
+					Err: fmt.Errorf("no AI provider available: %v", err),
+				}
+			}()
+			return ch
+		}
+
+		go func() {
+			defer close(ch)
+			for ev, err := range a.Run(ctx, sess) {
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- api.AgentResult{Event: ev, Err: err}:
+				}
+				if err != nil {
+					return
+				}
+			}
+		}()
+		return ch
+	}
+}
+
 // Run starts the GUI server and blocks until the context is cancelled or
 // SIGINT/SIGTERM is received.
 func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
+	// Detect project from cwd for session association.
+	var projectName string
+	if c.projectStore != nil {
+		det := project.NewDetector(c.projectStore)
+		if cwd, err := os.Getwd(); err == nil {
+			if p, err := det.Detect(cwd); err == nil && p != nil {
+				projectName = p.Name
+			}
+		}
+	}
+
+	// Collect project repo paths for file API scoping.
+	var projectRoots []string
+	if c.projectStore != nil && projectName != "" {
+		if p, err := c.projectStore.Load(projectName); err == nil {
+			for _, r := range p.Repos {
+				projectRoots = append(projectRoots, r.EffectivePath())
+			}
+		}
+	}
+	if len(projectRoots) == 0 {
+		if cwd, err := os.Getwd(); err == nil {
+			projectRoots = []string{cwd}
+		}
+	}
+
+	// Set up notification dispatcher with OS local channel
+	dispatcher := notify.NewDispatcher(&localnotify.Channel{})
+
+	// Auto-detect tracker from project for backlog tools
+	var tracker backlog.Tracker
+	if c.projectStore != nil && projectName != "" {
+		if p, err := c.projectStore.Load(projectName); err == nil && p.Defaults.Tracker != nil {
+			if p.Defaults.Tracker.Type == "github" {
+				tracker = &ghbacklog.Tracker{Owner: p.Defaults.Tracker.Owner, Repo: p.Defaults.Tracker.Repo}
+			}
+		}
+	}
+
 	deps := api.Deps{
-		Config: c.cfgData,
-		Checks: c.checks,
-		Port:   c.port,
-		Store:  c.store,
+		Config:       c.cfgData,
+		Checks:       c.checks,
+		Port:         c.port,
+		Store:        c.store,
+		AgentRun:     makeAgentRun(c.cfgData),
+		ProjectStore: c.projectStore,
+		ProjectName:  projectName,
+		ProjectRoots: projectRoots,
+		Notifier:     api.NewNotifier(dispatcher),
+		Tracker:      tracker,
 	}
 
 	apiRouter := api.NewAPIRouter(deps)
 
 	mux := http.NewServeMux()
+
+	// WebSocket endpoints BEFORE the catch-all /api/ handler
+	termWorkDir := "."
+	if len(projectRoots) > 0 {
+		termWorkDir = projectRoots[0]
+	}
+	mux.Handle("/api/terminal/", ws.TerminalHandler(termWorkDir))
+
 	mux.Handle("/api/", apiRouter)
 
 	var opts []gui.Option

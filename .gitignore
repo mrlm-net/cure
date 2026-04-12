@@ -48,3 +48,6 @@ internal/gui/dist/*
 frontend/node_modules/
 frontend/.svelte-kit/
 frontend/build/
+cure
+*.cure
+Dockerfile.cure

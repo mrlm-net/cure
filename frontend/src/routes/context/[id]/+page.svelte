@@ -15,12 +15,26 @@
 		provider: string;
 		model: string;
 		history: Message[];
+		name?: string;
+		project_name?: string;
+		branch_name?: string;
+		repo_name?: string;
+		work_items?: string[];
+		agent_role?: string;
+		skill_name?: string;
+	}
+
+	interface ToolCallEvent {
+		id: string;
+		tool_name: string;
+		input_json: string;
 	}
 
 	interface SSEEvent {
 		kind: string;
 		text?: string;
 		error?: string;
+		tool_call?: ToolCallEvent;
 	}
 
 	const sessionId = $derived($page.params.id ?? '');
@@ -33,6 +47,8 @@
 	let streaming = $state(false);
 	let streamLoading = $state(false);
 	let streamBuffer = $state('');
+	let activeTool = $state<string | null>(null);
+	let hadToolActivity = $state(false);
 	let messagesContainer: HTMLDivElement | undefined = $state();
 	let textarea: HTMLTextAreaElement | undefined = $state();
 	let userScrolledUp = $state(false);
@@ -99,6 +115,8 @@
 		streaming = true;
 		streamLoading = true;
 		streamBuffer = '';
+		activeTool = null;
+		hadToolActivity = false;
 		userScrolledUp = false;
 		error = null;
 
@@ -136,14 +154,29 @@
 					try {
 						const event: SSEEvent = JSON.parse(line.slice(6));
 						if (event.kind === 'start') {
-							streamLoading = false;
+							// Keep streamLoading true until first token arrives
 						} else if (event.kind === 'token') {
-							streamBuffer += event.text ?? '';
+							streamLoading = false;
+							activeTool = null;
+							const sep = hadToolActivity && streamBuffer.length > 0 ? '\n\n' : '';
+							hadToolActivity = false;
+							streamBuffer += sep + (event.text ?? '');
 							scrollToBottom();
+						} else if (event.kind === 'tool_call') {
+							streamLoading = false;
+							hadToolActivity = true;
+							activeTool = event.tool_call?.tool_name ?? 'tool';
+							scrollToBottom();
+						} else if (event.kind === 'tool_result') {
+							hadToolActivity = true;
 						} else if (event.kind === 'done') {
+							activeTool = null;
+							hadToolActivity = false;
 							streaming = false;
 							await refreshSession();
 						} else if (event.kind === 'error') {
+							activeTool = null;
+							hadToolActivity = false;
 							error = event.error ?? 'Stream error';
 							streaming = false;
 						}
@@ -157,6 +190,7 @@
 		} finally {
 			streaming = false;
 			streamLoading = false;
+			activeTool = null;
 		}
 	}
 
@@ -188,11 +222,11 @@
 <div class="-m-6 flex h-[calc(100vh-3.5rem)] flex-col md:h-screen">
 	<!-- Header -->
 	<div
-		class="flex items-center gap-3 border-b border-white/10 bg-[#0d1117] px-4 py-3 md:px-6"
+		class="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 md:px-6"
 	>
 		<a
 			href="/context"
-			class="rounded-md p-1 text-[rgba(230,237,243,0.5)] transition-colors hover:bg-white/5 hover:text-[#e6edf3]"
+			class="rounded-md p-1 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-tertiary)]/50 hover:text-[var(--text-primary)]"
 			aria-label="Back to sessions"
 		>
 			<svg
@@ -209,11 +243,33 @@
 				<path d="M15 18l-6-6 6-6" />
 			</svg>
 		</a>
-		<div class="min-w-0">
-			<span class="font-mono text-sm text-[#58a6ff]">{sessionId.slice(0, 8)}</span>
-			{#if session?.model}
-				<span class="ml-2 text-xs text-[rgba(230,237,243,0.4)]">{session.model}</span>
-			{/if}
+		<div class="min-w-0 flex-1">
+			<div class="flex items-center gap-2">
+				<span class="font-mono text-sm text-[var(--accent)]">{session?.name || sessionId.slice(0, 8)}</span>
+				{#if session?.provider}
+					<span class="rounded bg-[var(--bg-tertiary)]/50 px-2 py-0.5 text-xs text-[var(--text-secondary)]">{session.provider}</span>
+				{/if}
+				{#if session?.agent_role}
+					<span class="rounded bg-[var(--accent)]/10 px-2 py-0.5 text-xs text-[var(--accent)]/70">{session.agent_role}</span>
+				{/if}
+			</div>
+			<div class="mt-0.5 flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+				{#if session?.project_name}
+					<span>{session.project_name}</span>
+				{/if}
+				{#if session?.branch_name}
+					<span class="font-mono">{session.branch_name}</span>
+				{/if}
+				{#if session?.skill_name}
+					<span class="text-[var(--text-secondary)]">{session.skill_name}</span>
+				{/if}
+				{#if session?.work_items?.length}
+					<span class="text-[var(--accent)]/50">{session.work_items.map(w => `#${w}`).join(', ')}</span>
+				{/if}
+				{#if session?.model}
+					<span class="text-[var(--text-tertiary)]">{session.model}</span>
+				{/if}
+			</div>
 		</div>
 	</div>
 
@@ -234,12 +290,12 @@
 		>
 			{#if displayMessages.length === 0}
 				<div class="flex h-full items-center justify-center">
-					<p class="text-sm text-[rgba(230,237,243,0.3)]">
+					<p class="text-sm text-[var(--text-tertiary)]">
 						Send a message to start the conversation
 					</p>
 				</div>
 			{:else}
-				<div class="mx-auto max-w-3xl space-y-4">
+				<div class="space-y-4 px-2">
 					{#each displayMessages as msg, i}
 						{@const isStreamingMsg = streaming && i === displayMessages.length - 1 && msg.role === 'assistant'}
 						<ChatBubble
@@ -251,17 +307,21 @@
 				</div>
 			{/if}
 
-			<!-- Stream loading indicator -->
-			{#if streamLoading}
-				<div class="mx-auto mt-4 flex max-w-3xl items-center gap-2">
+			<!-- Thinking / tool-use indicator -->
+			{#if streamLoading || activeTool}
+				<div class="mt-4 flex items-center gap-2">
 					<LoadingSpinner size="sm" />
-					<span class="text-xs text-[rgba(230,237,243,0.4)]">Thinking...</span>
+					{#if activeTool}
+						<span class="font-mono text-xs text-[var(--text-secondary)]">{activeTool}</span>
+					{:else}
+						<span class="text-xs text-[var(--text-secondary)]">Thinking...</span>
+					{/if}
 				</div>
 			{/if}
 
 			<!-- Inline error during streaming -->
 			{#if error && messages.length > 0}
-				<div class="mx-auto mt-4 max-w-3xl">
+				<div class="mt-4">
 					<ErrorBanner message={error} onDismiss={() => (error = null)} />
 				</div>
 			{/if}
@@ -270,12 +330,12 @@
 
 	<!-- Input area -->
 	<div
-		class="border-t border-white/10 bg-[#0d1117] px-4 py-3 md:px-6"
+		class="border-t border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 md:px-6"
 		style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
 	>
 		<form
 			onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}
-			class="mx-auto flex max-w-3xl items-end gap-3"
+			class="flex items-end gap-3"
 		>
 			<textarea
 				bind:this={textarea}
@@ -286,14 +346,14 @@
 				rows={1}
 				disabled={streaming}
 				aria-label="Message input"
-				class="flex-1 resize-none rounded-lg border border-white/10 bg-[#161b22] px-4 py-2.5 text-sm text-[#e6edf3] placeholder:text-[rgba(230,237,243,0.3)] focus:border-[#58a6ff]/50 focus:outline-none disabled:opacity-50"
+				class="flex-1 resize-none rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent)]/50 focus:outline-none disabled:opacity-50"
 			></textarea>
 			<button
 				type="submit"
 				disabled={streaming || !inputText.trim()}
 				aria-label="Send message"
 				aria-disabled={streaming || !inputText.trim()}
-				class="shrink-0 rounded-lg bg-[#58a6ff] p-2.5 text-[#0d1117] transition-colors hover:bg-[#79b8ff] disabled:opacity-50 disabled:cursor-not-allowed"
+				class="shrink-0 rounded-lg bg-[var(--accent)] p-2.5 text-white transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
 			>
 				<svg
 					width="18"

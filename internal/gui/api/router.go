@@ -1,11 +1,14 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/mrlm-net/cure/internal/backlog"
 	"github.com/mrlm-net/cure/pkg/agent"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/doctor"
+	"github.com/mrlm-net/cure/pkg/project"
 )
 
 // Deps holds the dependencies shared by all API handlers.
@@ -31,6 +34,24 @@ type Deps struct {
 	// and streams results. When nil, the messages endpoint uses a built-in
 	// echo stub that reflects the user's message back as word-level tokens.
 	AgentRun AgentRunFunc
+
+	// ProjectName is the auto-detected project name for the current cwd.
+	// Used to associate new sessions with the project.
+	ProjectName string
+
+	// ProjectStore is the project persistence layer. When nil, project
+	// endpoints return 501 Not Implemented.
+	ProjectStore project.ProjectStore
+
+	// Notifier dispatches notifications to configured channels.
+	// When nil, notifications are disabled.
+	Notifier Notifier
+
+	// Tracker is the backlog tracker for agent tools. When nil, backlog tools are not available.
+	Tracker backlog.Tracker
+
+	// ProjectRoots are the allowed file API root directories (from project repos).
+	ProjectRoots []string
 }
 
 // NewAPIRouter returns an http.Handler that mounts all /api/* routes.
@@ -42,6 +63,12 @@ func NewAPIRouter(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/health", healthHandler(deps.Port))
 	mux.HandleFunc("GET /api/config", configHandler(deps.Config))
 	mux.HandleFunc("GET /api/doctor", doctorHandler(deps.Checks))
+	mux.HandleFunc("GET /api/doctor/platform", doctorHandler(doctor.ControlPlaneChecks()))
+
+	// Project-scoped doctor (runs stack detection for the project's repos)
+	if deps.ProjectStore != nil && deps.ProjectName != "" {
+		mux.HandleFunc("GET /api/doctor/project", projectDoctorHandler(deps.ProjectStore, deps.ProjectName))
+	}
 	mux.HandleFunc("GET /api/generate/list", generateListHandler())
 	mux.HandleFunc("POST /api/generate/{template}", generateRunHandler())
 
@@ -54,14 +81,47 @@ func NewAPIRouter(deps Deps) http.Handler {
 		}
 
 		mux.HandleFunc("GET /api/context/sessions", sessionsListHandler(deps.Store))
-		mux.HandleFunc("POST /api/context/sessions", sessionsCreateHandler(deps.Store, defaults))
+		mux.HandleFunc("POST /api/context/sessions", sessionsCreateHandler(deps.Store, defaults, deps.ProjectName))
 		mux.HandleFunc("GET /api/context/sessions/{id}", sessionsGetHandler(deps.Store))
 		mux.HandleFunc("DELETE /api/context/sessions/{id}", sessionsDeleteHandler(deps.Store))
 		mux.HandleFunc("POST /api/context/sessions/{id}/fork", sessionsForkHandler(deps.Store))
-		mux.HandleFunc("POST /api/context/sessions/{id}/messages", messagesHandler(deps.Store, deps.AgentRun))
+		mux.HandleFunc("POST /api/context/sessions/{id}/messages", messagesHandler(deps.Store, deps.AgentRun, deps.Notifier))
 	}
 
+	// Project endpoints
+	if deps.ProjectStore != nil {
+		mux.HandleFunc("GET /api/project", projectListHandler(deps.ProjectStore))
+		mux.HandleFunc("POST /api/project", projectCreateHandler(deps.ProjectStore))
+		mux.HandleFunc("GET /api/project/{name}", projectGetHandler(deps.ProjectStore))
+		mux.HandleFunc("PUT /api/project/{name}", projectUpdateHandler(deps.ProjectStore))
+	}
+
+	// Config update API
+	mux.HandleFunc("PUT /api/config", configUpdateHandler())
+
+	// Global settings API (form-friendly)
+	mux.HandleFunc("GET /api/settings", settingsGetHandler())
+	mux.HandleFunc("PUT /api/settings", settingsPutHandler())
+
+	// Orchestration API
+	mux.HandleFunc("GET /api/orchestrate/status", orchestrateStatusHandler())
+	mux.HandleFunc("POST /api/orchestrate/init", orchestrateInitHandler(deps.ProjectStore, deps.ProjectName))
+	mux.HandleFunc("POST /api/orchestrate/up", orchestrateUpHandler(deps.ProjectStore, deps.ProjectName))
+	mux.HandleFunc("POST /api/orchestrate/down", orchestrateDownHandler(deps.ProjectStore, deps.ProjectName))
+
+	// File API (scoped to project roots)
+	mux.HandleFunc("GET /api/editor/roots", fileRootsHandler(deps.ProjectRoots))
+	mux.HandleFunc("GET /api/files", filesListHandler(deps.ProjectRoots))
+	mux.HandleFunc("PUT /api/files", fileWriteQueryHandler(deps.ProjectRoots))
+	mux.HandleFunc("GET /api/files/{path...}", fileReadHandler(deps.ProjectRoots))
+	mux.HandleFunc("PUT /api/files/{path...}", fileWriteHandler(deps.ProjectRoots))
+
 	return mux
+}
+
+// Notifier is the interface for dispatching notifications from the GUI.
+type Notifier interface {
+	Notify(ctx context.Context, sessionID, sessionName, projectName, summary string) error
 }
 
 // configString extracts a dot-notation string value from ConfigObject.

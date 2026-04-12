@@ -40,7 +40,7 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<h1 class="text-xl font-semibold tracking-tight text-[#e6edf3]">Generate</h1>
+	<h1 class="text-xl font-semibold tracking-tight text-[var(--text-primary)]">Generate</h1>
 
 	{#if loading}
 		<div class="flex items-center justify-center py-12">
@@ -68,13 +68,13 @@
 			<p class="mt-1 text-xs text-white/30">This feature is under development</p>
 		</div>
 	{:else if templates.length === 0}
-		<p class="py-8 text-center text-sm text-[rgba(230,237,243,0.5)]">No templates available</p>
+		<p class="py-8 text-center text-sm text-[var(--text-secondary)]">No templates available</p>
 	{:else}
 		<div class="space-y-2">
 			{#each templates as template (template.name)}
-				<div class="rounded-lg border border-white/10 bg-[#161b22] px-4 py-3">
-					<p class="text-sm font-medium text-[#e6edf3]">{template.name}</p>
-					<p class="mt-0.5 text-xs text-[rgba(230,237,243,0.5)]">{template.description}</p>
+				<div class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3">
+					<p class="text-sm font-medium text-[var(--text-primary)]">{template.name}</p>
+					<p class="mt-0.5 text-xs text-[var(--text-secondary)]">{template.description}</p>
 				</div>
 			{/each}
 		</div>

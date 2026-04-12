@@ -1,10 +1,14 @@
 module github.com/mrlm-net/cure
 
-go 1.25
+go 1.25.0
 
 toolchain go1.25.7
 
-require github.com/anthropics/anthropic-sdk-go v1.27.1
+require (
+	github.com/anthropics/anthropic-sdk-go v1.27.1
+	github.com/creack/pty v1.1.24
+	golang.org/x/net v0.53.0
+)
 
 require (
 	github.com/stretchr/testify v1.11.1 // indirect

@@ -196,6 +196,30 @@ func (s *JSONStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+// Search returns sessions matching the filter criteria, ordered by UpdatedAt
+// descending. A zero-value filter returns all sessions.
+func (s *JSONStore) Search(ctx context.Context, filter agent.SessionFilter) ([]*agent.Session, error) {
+	all, err := s.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*agent.Session
+	for _, sess := range all {
+		if filter.MatchSession(sess) {
+			results = append(results, sess)
+			if filter.Limit > 0 && len(results) >= filter.Limit {
+				break
+			}
+		}
+	}
+
+	if results == nil {
+		results = []*agent.Session{}
+	}
+	return results, nil
+}
+
 // Fork creates an independent copy of the session identified by id, assigns
 // it a new ID, persists the copy, and returns it.
 // Returns a wrapped [agent.ErrSessionNotFound] when the source session does not exist.

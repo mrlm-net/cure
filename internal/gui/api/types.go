@@ -22,14 +22,21 @@ type CheckResultResponse struct {
 
 // SessionSummary represents a session in list responses.
 type SessionSummary struct {
-	ID        string    `json:"id"`
-	Provider  string    `json:"provider"`
-	Model     string    `json:"model"`
-	Tags      []string  `json:"tags,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	ForkOf    string    `json:"fork_of,omitempty"`
-	Turns     int       `json:"turns"`
+	ID          string    `json:"id"`
+	Provider    string    `json:"provider"`
+	Model       string    `json:"model"`
+	Tags        []string  `json:"tags,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	ForkOf      string    `json:"fork_of,omitempty"`
+	Turns       int       `json:"turns"`
+	Name        string    `json:"name,omitempty"`
+	ProjectName string    `json:"project_name,omitempty"`
+	BranchName  string    `json:"branch_name,omitempty"`
+	RepoName    string    `json:"repo_name,omitempty"`
+	WorkItems   []string  `json:"work_items,omitempty"`
+	AgentRole   string    `json:"agent_role,omitempty"`
+	SkillName   string    `json:"skill_name,omitempty"`
 }
 
 // SessionDetail includes full message history alongside the session summary.
@@ -46,8 +53,10 @@ type MessageResponse struct {
 
 // CreateSessionRequest is the POST body for creating new sessions.
 type CreateSessionRequest struct {
-	Provider string `json:"provider,omitempty"`
-	Model    string `json:"model,omitempty"`
+	Provider    string `json:"provider,omitempty"`
+	Model       string `json:"model,omitempty"`
+	ProjectName string `json:"project_name,omitempty"`
+	ContainerID string `json:"container_id,omitempty"` // target container (empty = local)
 }
 
 // MessageRequest is the POST body for sending a message within a session.

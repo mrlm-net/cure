@@ -115,3 +115,23 @@ func (s *mockStore) Fork(_ context.Context, id string) (*agent.Session, error) {
 	_ = s.Save(context.Background(), forked)
 	return forked, nil
 }
+
+func (s *mockStore) Search(ctx context.Context, filter agent.SessionFilter) ([]*agent.Session, error) {
+	all, err := s.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var results []*agent.Session
+	for _, sess := range all {
+		if filter.MatchSession(sess) {
+			results = append(results, sess)
+			if filter.Limit > 0 && len(results) >= filter.Limit {
+				break
+			}
+		}
+	}
+	if results == nil {
+		results = []*agent.Session{}
+	}
+	return results, nil
+}

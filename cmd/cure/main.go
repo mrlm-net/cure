@@ -16,11 +16,20 @@ import (
 	"github.com/mrlm-net/cure/internal/commands/generate"
 	guicmd "github.com/mrlm-net/cure/internal/commands/gui"
 	initcmd "github.com/mrlm-net/cure/internal/commands/init"
+	backlogcmd "github.com/mrlm-net/cure/internal/commands/backlog"
 	mcmcmd "github.com/mrlm-net/cure/internal/commands/mcp"
+	orchcmd "github.com/mrlm-net/cure/internal/commands/orchestrate"
+	projcmd "github.com/mrlm-net/cure/internal/commands/project"
+	regcmd "github.com/mrlm-net/cure/internal/commands/registry"
+	synccmd "github.com/mrlm-net/cure/internal/commands/sync"
 	"github.com/mrlm-net/cure/internal/commands/trace"
+	vcscmd "github.com/mrlm-net/cure/internal/commands/vcs"
+	ghbacklog "github.com/mrlm-net/cure/internal/backlog/github"
 	agentstore "github.com/mrlm-net/cure/pkg/agent/store"
 	"github.com/mrlm-net/cure/pkg/config"
 	pkgdoctor "github.com/mrlm-net/cure/pkg/doctor"
+	"github.com/mrlm-net/cure/pkg/project"
+	"github.com/mrlm-net/cure/pkg/registry"
 	"github.com/mrlm-net/cure/pkg/template"
 	"github.com/mrlm-net/cure/pkg/terminal"
 )
@@ -59,8 +68,42 @@ func run(args []string) error {
 	router.Register(initcmd.NewInitCommand())
 	// Register mcp BEFORE completion so it is visible to completion introspection.
 	router.Register(mcmcmd.NewMCPCommand())
+	// Initialise project store for project detection and GUI.
+	var projectStore *project.Store
+	if baseDir, err := project.DefaultBaseDir(); err == nil {
+		projectStore = project.NewStore(baseDir)
+	}
+	// Register project command BEFORE completion.
+	if projectStore != nil {
+		router.Register(projcmd.NewProjectCommand(projectStore))
+	}
+	// Initialise registry for AI config distribution.
+	var reg *registry.Registry
+	if regDir, err := registry.DefaultBaseDir(); err == nil {
+		reg = registry.New(regDir)
+		router.Register(regcmd.NewRegistryCommand(reg, regDir))
+		router.Register(synccmd.NewSyncCommand(reg))
+	}
+	// Register orchestrate command.
+	if projectStore != nil {
+		router.Register(orchcmd.NewOrchestrateCommand(projectStore))
+	}
+	// Register vcs and backlog commands.
+	router.Register(vcscmd.NewVCSCommand())
+	if projectStore != nil {
+		// Auto-detect tracker from project config for backlog command.
+		det := project.NewDetector(projectStore)
+		if cwd, err := os.Getwd(); err == nil {
+			if p, err := det.Detect(cwd); err == nil && p != nil && p.Defaults.Tracker != nil {
+				if p.Defaults.Tracker.Type == "github" {
+					tracker := &ghbacklog.Tracker{Owner: p.Defaults.Tracker.Owner, Repo: p.Defaults.Tracker.Repo}
+					router.Register(backlogcmd.NewBacklogCommand(tracker))
+				}
+			}
+		}
+	}
 	// Register gui BEFORE completion so it is visible to completion introspection.
-	router.Register(guicmd.NewGUICommand(cfg.Data(), pkgdoctor.BuiltinChecks(), sessionStore))
+	router.Register(guicmd.NewGUICommand(cfg.Data(), pkgdoctor.BuiltinChecks(), sessionStore, projectStore))
 	router.Register(completion.NewCompletionCommand(router))
 	return router.RunArgs(args)
 }
@@ -89,6 +132,19 @@ func loadConfig() *config.Config {
 		}
 	}
 
+	// Project config — auto-detect project from cwd and load its defaults.
+	// Slots between global and local in the merge chain.
+	var projectCfg config.ConfigObject
+	if baseDir, err := project.DefaultBaseDir(); err == nil {
+		store := project.NewStore(baseDir)
+		detector := project.NewDetector(store)
+		if cwd, err := os.Getwd(); err == nil {
+			if p, err := detector.Detect(cwd); err == nil && p != nil {
+				projectCfg = projectToConfigObject(p)
+			}
+		}
+	}
+
 	// Local config (./.cure.json)
 	localPath := ".cure.json"
 	localCfg, err := config.File(localPath)
@@ -99,7 +155,41 @@ func loadConfig() *config.Config {
 	// Environment variables (highest precedence for file-based config)
 	envCfg := config.Environment("CURE_", "_")
 
-	// Merge with precedence: defaults < global < local < env
+	// Merge with precedence: defaults < global < project < local < env
 	// Note: CLI flags are applied per-command, not here
-	return config.NewConfig(defaults, globalCfg, localCfg, envCfg)
+	return config.NewConfig(defaults, globalCfg, projectCfg, localCfg, envCfg)
+}
+
+// projectToConfigObject converts project defaults into a ConfigObject so they
+// can participate in the standard config merge chain.
+func projectToConfigObject(p *project.Project) config.ConfigObject {
+	obj := config.ConfigObject{}
+	if p.Defaults.Provider != "" {
+		obj["agent.provider"] = p.Defaults.Provider
+	}
+	if p.Defaults.Model != "" {
+		obj["agent.claude.model"] = p.Defaults.Model
+	}
+	if p.Defaults.MaxTurns > 0 {
+		obj["agent.max_turns"] = p.Defaults.MaxTurns
+	}
+	if p.Defaults.MaxBudgetUSD > 0 {
+		obj["agent.max_budget_usd"] = p.Defaults.MaxBudgetUSD
+	}
+	if p.Defaults.SystemPrompt != "" {
+		obj["agent.system_prompt"] = p.Defaults.SystemPrompt
+	}
+	if p.Defaults.MaxAgents > 0 {
+		obj["agent.max_agents"] = p.Defaults.MaxAgents
+	}
+	if p.Defaults.Tracker != nil {
+		obj["tracker.type"] = p.Defaults.Tracker.Type
+		if p.Defaults.Tracker.Owner != "" {
+			obj["tracker.owner"] = p.Defaults.Tracker.Owner
+		}
+		if p.Defaults.Tracker.Repo != "" {
+			obj["tracker.repo"] = p.Defaults.Tracker.Repo
+		}
+	}
+	return obj
 }

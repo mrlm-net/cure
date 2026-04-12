@@ -8,28 +8,28 @@ import (
 )
 
 func TestGUICommandName(t *testing.T) {
-	cmd := NewGUICommand(nil, nil, nil)
+	cmd := NewGUICommand(nil, nil, nil, nil)
 	if got := cmd.Name(); got != "gui" {
 		t.Errorf("Name() = %q, want %q", got, "gui")
 	}
 }
 
 func TestGUICommandDescription(t *testing.T) {
-	cmd := NewGUICommand(nil, nil, nil)
+	cmd := NewGUICommand(nil, nil, nil, nil)
 	if got := cmd.Description(); got == "" {
 		t.Error("Description() is empty, want non-empty string")
 	}
 }
 
 func TestGUICommandUsage(t *testing.T) {
-	cmd := NewGUICommand(nil, nil, nil)
+	cmd := NewGUICommand(nil, nil, nil, nil)
 	if got := cmd.Usage(); got == "" {
 		t.Error("Usage() is empty, want non-empty string")
 	}
 }
 
 func TestGUICommandFlags(t *testing.T) {
-	cmd := NewGUICommand(nil, nil, nil)
+	cmd := NewGUICommand(nil, nil, nil, nil)
 	fs := cmd.Flags()
 	if fs == nil {
 		t.Fatal("Flags() returned nil")
@@ -64,7 +64,7 @@ func TestGUICommandConstructor(t *testing.T) {
 		},
 	}
 
-	cmd := NewGUICommand(cfgData, checks, nil)
+	cmd := NewGUICommand(cfgData, checks, nil, nil)
 	gc, ok := cmd.(*GUICommand)
 	if !ok {
 		t.Fatalf("NewGUICommand returned %T, want *GUICommand", cmd)

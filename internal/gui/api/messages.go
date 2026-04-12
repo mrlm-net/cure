@@ -28,10 +28,10 @@ type SSEEvent struct {
 // AgentRunFunc is the function signature for running an agent turn on a session.
 // It mirrors [agent.Agent.Run] without requiring the full Agent interface,
 // making it easy to inject a stub for testing.
-type AgentRunFunc func(ctx context.Context, session *agent.Session) <-chan agentResult
+type AgentRunFunc func(ctx context.Context, session *agent.Session) <-chan AgentResult
 
-// agentResult is the value produced by an AgentRunFunc for each streamed event.
-type agentResult struct {
+// AgentResult is the value produced by an AgentRunFunc for each streamed event.
+type AgentResult struct {
 	Event agent.Event
 	Err   error
 }
@@ -41,7 +41,7 @@ type agentResult struct {
 // streams the response as SSE events. When no real agent is configured
 // (runFn is nil), a built-in echo stub splits the user message into words
 // and streams them back as tokens.
-func messagesHandler(store agent.SessionStore, runFn AgentRunFunc) http.HandlerFunc {
+func messagesHandler(store agent.SessionStore, runFn AgentRunFunc, notifier ...Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -123,6 +123,20 @@ func messagesHandler(store agent.SessionStore, runFn AgentRunFunc) http.HandlerF
 						sess.AppendAssistantMessage(assistantText.String())
 					}
 					_ = store.Save(context.Background(), sess)
+
+					// Send OS/channel notification on completion
+					if len(notifier) > 0 && notifier[0] != nil {
+						summary := assistantText.String()
+						if len(summary) > 100 {
+							summary = summary[:100] + "..."
+						}
+						notifier[0].Notify(context.Background(), sess.ID, sess.Name, sess.ProjectName, summary)
+					}
+				}
+
+				// Notify on errors too
+				if ev.Kind == agent.EventKindError && len(notifier) > 0 && notifier[0] != nil {
+					notifier[0].Notify(context.Background(), sess.ID, sess.Name, sess.ProjectName, "Error: "+ev.Err)
 				}
 
 				writeSSE(w, flusher, SSEEvent{
@@ -153,8 +167,8 @@ func writeSSE(w http.ResponseWriter, flusher http.Flusher, ev SSEEvent) {
 // echoAgentRun is a built-in stub that echoes the user's last message back
 // as individual word tokens. This allows the SSE infrastructure to work
 // without a real AI provider configured.
-func echoAgentRun(ctx context.Context, session *agent.Session) <-chan agentResult {
-	ch := make(chan agentResult, 16)
+func echoAgentRun(ctx context.Context, session *agent.Session) <-chan AgentResult {
+	ch := make(chan AgentResult, 16)
 
 	// Extract the last user message from history.
 	var userText string
@@ -172,7 +186,7 @@ func echoAgentRun(ctx context.Context, session *agent.Session) <-chan agentResul
 		select {
 		case <-ctx.Done():
 			return
-		case ch <- agentResult{Event: agent.Event{Kind: agent.EventKindStart}}:
+		case ch <- AgentResult{Event: agent.Event{Kind: agent.EventKindStart}}:
 		}
 
 		// token events — one per word
@@ -184,7 +198,7 @@ func echoAgentRun(ctx context.Context, session *agent.Session) <-chan agentResul
 			select {
 			case <-ctx.Done():
 				return
-			case ch <- agentResult{Event: agent.Event{Kind: agent.EventKindToken, Text: word}}:
+			case ch <- AgentResult{Event: agent.Event{Kind: agent.EventKindToken, Text: word}}:
 			}
 		}
 
@@ -192,7 +206,7 @@ func echoAgentRun(ctx context.Context, session *agent.Session) <-chan agentResul
 		select {
 		case <-ctx.Done():
 			return
-		case ch <- agentResult{Event: agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"}}:
+		case ch <- AgentResult{Event: agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"}}:
 		}
 	}()
 

@@ -53,6 +53,9 @@ type claudeCodeAdapter struct {
 	maxTurns        int
 	allowedTools    []string
 	disallowedTools []string
+	mcpConfigPath   string
+	permissionMode  string
+	maxBudgetUSD    float64
 }
 
 // NewClaudeCodeAgent is the AgentFactory for the "claude-code" provider.
@@ -92,12 +95,22 @@ func NewClaudeCodeAgent(cfg map[string]any) (agent.Agent, error) {
 		disallowedTools = toStringSlice(raw)
 	}
 
+	mcpConfig, _ := cfg["mcp_config"].(string)
+	permMode, _ := cfg["permission_mode"].(string)
+	var maxBudget float64
+	if v, ok := cfg["max_budget_usd"].(float64); ok {
+		maxBudget = v
+	}
+
 	return &claudeCodeAdapter{
 		claudeBin:       bin,
 		model:           model,
 		maxTurns:        maxTurns,
 		allowedTools:    allowedTools,
 		disallowedTools: disallowedTools,
+		mcpConfigPath:   mcpConfig,
+		permissionMode:  permMode,
+		maxBudgetUSD:    maxBudget,
 	}, nil
 }
 
@@ -202,19 +215,45 @@ func (a *claudeCodeAdapter) buildArgs(sess *agent.Session, prompt string) []stri
 	args := []string{
 		"-p", prompt,
 		"--output-format", "stream-json",
+		"--include-partial-messages",
 		"--verbose",
 		"--model", a.model,
 		"--max-turns", fmt.Sprintf("%d", a.maxTurns),
 	}
+
+	// System prompt: direct or from file
 	if sess.SystemPrompt != "" {
 		args = append(args, "--system-prompt", sess.SystemPrompt)
 	}
+
+	// Tool control
 	if len(a.allowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(a.allowedTools, ","))
 	}
 	if len(a.disallowedTools) > 0 {
 		args = append(args, "--disabledTools", strings.Join(a.disallowedTools, ","))
 	}
+
+	// Session naming for CC CLI session management
+	if sess.Name != "" {
+		args = append(args, "--name", sess.Name)
+	}
+
+	// MCP config injection (from runtime assembly)
+	if a.mcpConfigPath != "" {
+		args = append(args, "--mcp-config", a.mcpConfigPath)
+	}
+
+	// Permission mode
+	if a.permissionMode != "" {
+		args = append(args, "--permission-mode", a.permissionMode)
+	}
+
+	// Budget cap
+	if a.maxBudgetUSD > 0 {
+		args = append(args, "--max-budget-usd", fmt.Sprintf("%.2f", a.maxBudgetUSD))
+	}
+
 	return args
 }
 
