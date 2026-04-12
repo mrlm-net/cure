@@ -1,0 +1,43 @@
+## Security Scan: PR #144 — MCP serve command
+
+**Scan date:** 2026-03-28
+
+### Findings
+
+No actionable security findings in this PR.
+
+---
+
+#### INFO — A05 Misconfiguration: Default HTTP bind is loopback-only — correct
+
+`WithAddr(c.addr)` defaults to `"127.0.0.1:8080"`. Binding to a non-loopback address requires explicit `--addr` opt-in. The `pkg/mcp` `WithAllowedOrigins` option documents DNS rebinding risk when origins are unrestricted. The `checkOrigin` function in `pkg/mcp/http.go` correctly:
+- Allows all origins when `allowedOrigins` is empty (safe for local dev tool)
+- Rejects the literal `"null"` origin when an allowlist is configured (prevents file:// bypass)
+- Allows requests without an Origin header (server-to-server)
+
+This is correct defensive design.
+
+---
+
+#### INFO — A01 Broken Access Control: generate tools always use DryRun=true — no filesystem writes from MCP
+
+`aiFileOptsFromArgs` sets `DryRun: true` and `NonInteractive: true`. `writeAIFile` routes DryRun=true through the writer path, never calling `fs.AtomicWrite`. MCP tool calls cannot write to the filesystem regardless of what arguments the MCP client sends. No path traversal or TOCTOU risk.
+
+---
+
+#### INFO — A05: MCP HTTP server has correct timeouts
+
+`pkg/mcp/http.go` sets `ReadHeaderTimeout: 10s`, `ReadTimeout: 30s`, `IdleTimeout: 120s`. `WriteTimeout: 0` is intentional and documented (SSE connections are long-lived). Correct.
+
+---
+
+### OWASP Status
+
+| Category | Status | Notes |
+|----------|--------|-------|
+| A01 Broken Access Control | PASS | generate tools are DryRun=true; no filesystem writes |
+| A05 Security Misconfiguration | PASS | Loopback-only default; CORS checkOrigin is correct |
+| A10 SSRF | PASS | No outbound HTTP requests from serve command itself |
+| All others | PASS | No surface in this PR |
+
+Full report: `docs/security-assessment-v09x-v10x.md`

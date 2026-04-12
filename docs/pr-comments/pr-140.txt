@@ -1,0 +1,9 @@
+## Security Scan: PR #140 — pkg/mcp Server.Tools() accessor
+
+**Scan date:** 2026-03-28
+
+No security findings.
+
+`Tools()` returns a copy of the tool slice under `s.mu.RLock()`, preventing data races. The returned slice is independent of the server's internal map. No sensitive data is exposed by this accessor.
+
+Full report: `docs/security-assessment-v09x-v10x.md`
