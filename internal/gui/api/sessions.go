@@ -63,6 +63,14 @@ func sessionsCreateHandler(store agent.SessionStore, cfg configDefaults, project
 			sess.ProjectName = projectName
 		}
 
+		// Set container target if specified
+		if req.ContainerID != "" {
+			sess.ContainerID = req.ContainerID
+			sess.Mode = "autonomous"
+		} else {
+			sess.Mode = "interactive"
+		}
+
 		// Auto-populate git context and create session branch
 		if cwd, err := os.Getwd(); err == nil {
 			if branch, err := gitCurrentBranch(cwd); err == nil {

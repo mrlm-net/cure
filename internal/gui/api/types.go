@@ -56,6 +56,7 @@ type CreateSessionRequest struct {
 	Provider    string `json:"provider,omitempty"`
 	Model       string `json:"model,omitempty"`
 	ProjectName string `json:"project_name,omitempty"`
+	ContainerID string `json:"container_id,omitempty"` // target container (empty = local)
 }
 
 // MessageRequest is the POST body for sending a message within a session.

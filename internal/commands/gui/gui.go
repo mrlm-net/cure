@@ -18,6 +18,7 @@ import (
 	"github.com/mrlm-net/cure/internal/gui/api"
 	"github.com/mrlm-net/cure/internal/gui/ws"
 	localnotify "github.com/mrlm-net/cure/internal/notifications/local"
+	"github.com/mrlm-net/cure/pkg/mcp"
 	"github.com/mrlm-net/cure/pkg/notify"
 	"github.com/mrlm-net/cure/pkg/agent"
 	"github.com/mrlm-net/cure/pkg/config"
@@ -80,6 +81,42 @@ func (c *GUICommand) Flags() *flag.FlagSet {
 func makeAgentRun(cfgData config.ConfigObject) api.AgentRunFunc {
 	return func(ctx context.Context, sess *agent.Session) <-chan api.AgentResult {
 		ch := make(chan api.AgentResult, 16)
+
+		// If session targets a container, dispatch via MCP client
+		if sess.ContainerID != "" {
+			go func() {
+				defer close(ch)
+				// Container MCP endpoint: agent-N maps to port 9100+N
+				agentNum := 1
+				if len(sess.ContainerID) > 6 {
+					if n := sess.ContainerID[len(sess.ContainerID)-1]; n >= '1' && n <= '9' {
+						agentNum = int(n - '0')
+					}
+				}
+				port := 9100 + agentNum
+				endpoint := fmt.Sprintf("http://127.0.0.1:%d/mcp", port)
+
+				// Call the container's cure MCP server
+				client := mcp.NewClient(endpoint)
+				result, err := client.CallTool(ctx, "echo", map[string]any{"message": "Session " + sess.ID + " connected to " + sess.ContainerID})
+				if err != nil {
+					ch <- api.AgentResult{
+						Event: agent.Event{Kind: agent.EventKindStart},
+					}
+					ch <- api.AgentResult{
+						Event: agent.Event{Kind: agent.EventKindToken, Text: "Connected to container " + sess.ContainerID + " (MCP). Waiting for agent setup..."},
+					}
+					ch <- api.AgentResult{
+						Event: agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"},
+					}
+					return
+				}
+				ch <- api.AgentResult{Event: agent.Event{Kind: agent.EventKindStart}}
+				ch <- api.AgentResult{Event: agent.Event{Kind: agent.EventKindToken, Text: result}}
+				ch <- api.AgentResult{Event: agent.Event{Kind: agent.EventKindDone, StopReason: "end_turn"}}
+			}()
+			return ch
+		}
 
 		// Assemble config from merged layers (includes project overrides)
 		model, _ := cfgData["agent.claude.model"].(string)

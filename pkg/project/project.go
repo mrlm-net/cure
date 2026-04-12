@@ -60,9 +60,19 @@ type TrackerCfg struct {
 
 // DevcontainerCfg configures the devcontainer for orchestrated agents.
 type DevcontainerCfg struct {
-	Image      string   `json:"image,omitempty"`
-	Dockerfile string   `json:"dockerfile,omitempty"`
-	Features   []string `json:"features,omitempty"`
+	Image      string        `json:"image,omitempty"`
+	Dockerfile string        `json:"dockerfile,omitempty"`
+	Features   []string      `json:"features,omitempty"`
+	Services   []ServiceCfg  `json:"services,omitempty"` // additional compose services
+}
+
+// ServiceCfg defines an additional docker-compose service for the project stack.
+type ServiceCfg struct {
+	Name    string            `json:"name"`              // e.g. "postgres", "redis"
+	Image   string            `json:"image"`             // e.g. "postgres:16"
+	Ports   []string          `json:"ports,omitempty"`    // e.g. ["5432:5432"]
+	Env     map[string]string `json:"env,omitempty"`      // e.g. {"POSTGRES_PASSWORD": "dev"}
+	Volumes []string          `json:"volumes,omitempty"`  // e.g. ["pgdata:/var/lib/postgresql/data"]
 }
 
 // NotificationsCfg configures notification channels for the project.

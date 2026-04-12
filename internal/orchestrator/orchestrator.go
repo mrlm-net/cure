@@ -169,6 +169,34 @@ func (o *Orchestrator) generateCompose() string {
 		fmt.Fprintln(&b, "      - cure-net")
 	}
 
+	// Additional stack services from project config
+	if o.project.Devcontainer != nil {
+		for _, svc := range o.project.Devcontainer.Services {
+			fmt.Fprintf(&b, "  %s:\n", svc.Name)
+			fmt.Fprintf(&b, "    image: %s\n", svc.Image)
+			if len(svc.Ports) > 0 {
+				fmt.Fprintln(&b, "    ports:")
+				for _, p := range svc.Ports {
+					fmt.Fprintf(&b, "      - \"%s\"\n", p)
+				}
+			}
+			if len(svc.Env) > 0 {
+				fmt.Fprintln(&b, "    environment:")
+				for k, v := range svc.Env {
+					fmt.Fprintf(&b, "      - %s=%s\n", k, v)
+				}
+			}
+			if len(svc.Volumes) > 0 {
+				fmt.Fprintln(&b, "    volumes:")
+				for _, v := range svc.Volumes {
+					fmt.Fprintf(&b, "      - %s\n", v)
+				}
+			}
+			fmt.Fprintln(&b, "    networks:")
+			fmt.Fprintln(&b, "      - cure-net")
+		}
+	}
+
 	fmt.Fprintln(&b, "\nnetworks:")
 	fmt.Fprintln(&b, "  cure-net:")
 	fmt.Fprintln(&b, "    driver: bridge")

@@ -32,6 +32,7 @@
 	let mutating = $state(false);
 	let showCreateForm = $state(false);
 	let selectedProject = $state('');
+	let selectedTarget = $state(''); // empty = local, "agent-N" = container
 	let deleteTarget = $state<string | null>(null);
 
 	async function fetchSessions(): Promise<void> {
@@ -60,10 +61,12 @@
 		mutating = true;
 		error = null;
 		try {
+			const body: any = { project_name: selectedProject };
+			if (selectedTarget) body.container_id = selectedTarget;
 			const data = await apiFetch<{ id: string }>('/api/context/sessions', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ project_name: selectedProject })
+				body: JSON.stringify(body)
 			});
 			showCreateForm = false;
 			if (data?.id) {
@@ -148,6 +151,20 @@
 						{#each projects as p}
 							<option value={p.name}>{p.name}{p.description ? ` — ${p.description}` : ''}</option>
 						{/each}
+					</select>
+				</div>
+				<div class="flex-1">
+					<label for="target-select" class="mb-1 block text-xs font-medium text-[var(--text-secondary)]">Run target</label>
+					<select
+						id="target-select"
+						bind:value={selectedTarget}
+						class="w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)]/50 focus:outline-none"
+					>
+						<option value="">Local (this machine)</option>
+						<option value="agent-1">Container: agent-1</option>
+						<option value="agent-2">Container: agent-2</option>
+						<option value="agent-3">Container: agent-3</option>
+						<option value="agent-4">Container: agent-4</option>
 					</select>
 				</div>
 				<button
