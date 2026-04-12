@@ -103,6 +103,10 @@ func NewAPIRouter(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/settings", settingsGetHandler())
 	mux.HandleFunc("PUT /api/settings", settingsPutHandler())
 
+	// Orchestration API
+	mux.HandleFunc("GET /api/orchestrate/status", orchestrateStatusHandler())
+	mux.HandleFunc("POST /api/orchestrate/init", orchestrateInitHandler(deps.ProjectStore, deps.ProjectName))
+
 	// File API (scoped to project roots)
 	mux.HandleFunc("GET /api/editor/roots", fileRootsHandler(deps.ProjectRoots))
 	mux.HandleFunc("GET /api/files", filesListHandler(deps.ProjectRoots))

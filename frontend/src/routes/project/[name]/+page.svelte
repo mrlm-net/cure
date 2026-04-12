@@ -275,21 +275,44 @@
 		<!-- Config tab (editable JSON) -->
 		<!-- Tools tab -->
 		{#if tab === 'tools'}
-			<div class="grid gap-4 sm:grid-cols-2">
-				<a href="/editor" class="group rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5 transition-colors hover:border-[var(--accent)]/30">
-					<div class="flex items-center gap-3 mb-2">
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-						<h3 class="text-sm font-medium text-[var(--text-primary)] group-hover:text-[var(--accent)]">Editor</h3>
+			<div class="space-y-4">
+				<div class="grid gap-4 sm:grid-cols-2">
+					<a href="/editor" class="group rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5 transition-colors hover:border-[var(--accent)]/30">
+						<div class="flex items-center gap-3 mb-2">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+							<h3 class="text-sm font-medium text-[var(--text-primary)] group-hover:text-[var(--accent)]">Editor</h3>
+						</div>
+						<p class="text-xs text-[var(--text-tertiary)]">Browse and edit files in this project's repositories</p>
+					</a>
+					<a href="/terminal" class="group rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5 transition-colors hover:border-[var(--accent)]/30">
+						<div class="flex items-center gap-3 mb-2">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+							<h3 class="text-sm font-medium text-[var(--text-primary)] group-hover:text-[var(--accent)]">Terminal</h3>
+						</div>
+						<p class="text-xs text-[var(--text-tertiary)]">Shell session in this project's working directory</p>
+					</a>
+				</div>
+
+				<!-- Orchestration -->
+				<section class="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5">
+					<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Agent Orchestration</h3>
+					<p class="mb-3 text-xs text-[var(--text-tertiary)]">Manage isolated agent containers for this project. Requires Docker.</p>
+					<div class="flex gap-2">
+						<button
+							onclick={async () => {
+								try {
+									await apiFetch('/api/orchestrate/init', { method: 'POST' });
+									alert('docker-compose.cure.yml generated');
+								} catch (e) {
+									error = e instanceof Error ? e.message : 'Init failed';
+								}
+							}}
+							class="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs text-white hover:opacity-90"
+						>
+							Initialize Containers
+						</button>
 					</div>
-					<p class="text-xs text-[var(--text-tertiary)]">Browse and edit files in this project's repositories</p>
-				</a>
-				<a href="/terminal" class="group rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-5 transition-colors hover:border-[var(--accent)]/30">
-					<div class="flex items-center gap-3 mb-2">
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-						<h3 class="text-sm font-medium text-[var(--text-primary)] group-hover:text-[var(--accent)]">Terminal</h3>
-					</div>
-					<p class="text-xs text-[var(--text-tertiary)]">Shell session in this project's working directory</p>
-				</a>
+				</section>
 			</div>
 		{/if}
 
