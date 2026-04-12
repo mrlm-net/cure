@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -62,7 +63,7 @@ func sessionsCreateHandler(store agent.SessionStore, cfg configDefaults, project
 			sess.ProjectName = projectName
 		}
 
-		// Auto-populate git context
+		// Auto-populate git context and create session branch
 		if cwd, err := os.Getwd(); err == nil {
 			if branch, err := gitCurrentBranch(cwd); err == nil {
 				sess.BranchName = branch
@@ -71,6 +72,14 @@ func sessionsCreateHandler(store agent.SessionStore, cfg configDefaults, project
 				sess.GitDirty = dirty
 			}
 			sess.RepoName = repoNameFromCwd(cwd)
+
+			// Create isolated branch for this session if on a main/protected branch
+			if sess.BranchName == "main" || sess.BranchName == "master" {
+				sessionBranch := fmt.Sprintf("session/%s", sess.ID[:8])
+				if err := gitCreateBranch(cwd, sessionBranch); err == nil {
+					sess.BranchName = sessionBranch
+				}
+			}
 		}
 
 		if err := store.Save(r.Context(), sess); err != nil {
@@ -215,6 +224,12 @@ func gitIsDirty(dir string) (bool, error) {
 		return false, err
 	}
 	return strings.TrimSpace(string(out)) != "", nil
+}
+
+func gitCreateBranch(dir, name string) error {
+	cmd := exec.Command("git", "checkout", "-b", name)
+	cmd.Dir = dir
+	return cmd.Run()
 }
 
 func repoNameFromCwd(cwd string) string {

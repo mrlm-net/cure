@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/mrlm-net/cure/internal/backlog"
 	"github.com/mrlm-net/cure/pkg/agent"
 	"github.com/mrlm-net/cure/pkg/config"
 	"github.com/mrlm-net/cure/pkg/doctor"
@@ -46,6 +47,9 @@ type Deps struct {
 	// When nil, notifications are disabled.
 	Notifier Notifier
 
+	// Tracker is the backlog tracker for agent tools. When nil, backlog tools are not available.
+	Tracker backlog.Tracker
+
 	// ProjectRoots are the allowed file API root directories (from project repos).
 	ProjectRoots []string
 }
@@ -60,6 +64,11 @@ func NewAPIRouter(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/config", configHandler(deps.Config))
 	mux.HandleFunc("GET /api/doctor", doctorHandler(deps.Checks))
 	mux.HandleFunc("GET /api/doctor/platform", doctorHandler(doctor.ControlPlaneChecks()))
+
+	// Project-scoped doctor (runs stack detection for the project's repos)
+	if deps.ProjectStore != nil && deps.ProjectName != "" {
+		mux.HandleFunc("GET /api/doctor/project", projectDoctorHandler(deps.ProjectStore, deps.ProjectName))
+	}
 	mux.HandleFunc("GET /api/generate/list", generateListHandler())
 	mux.HandleFunc("POST /api/generate/{template}", generateRunHandler())
 
@@ -76,7 +85,7 @@ func NewAPIRouter(deps Deps) http.Handler {
 		mux.HandleFunc("GET /api/context/sessions/{id}", sessionsGetHandler(deps.Store))
 		mux.HandleFunc("DELETE /api/context/sessions/{id}", sessionsDeleteHandler(deps.Store))
 		mux.HandleFunc("POST /api/context/sessions/{id}/fork", sessionsForkHandler(deps.Store))
-		mux.HandleFunc("POST /api/context/sessions/{id}/messages", messagesHandler(deps.Store, deps.AgentRun))
+		mux.HandleFunc("POST /api/context/sessions/{id}/messages", messagesHandler(deps.Store, deps.AgentRun, deps.Notifier))
 	}
 
 	// Project endpoints

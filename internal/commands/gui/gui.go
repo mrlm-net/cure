@@ -12,6 +12,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/mrlm-net/cure/internal/backlog"
+	ghbacklog "github.com/mrlm-net/cure/internal/backlog/github"
 	"github.com/mrlm-net/cure/internal/gui"
 	"github.com/mrlm-net/cure/internal/gui/api"
 	"github.com/mrlm-net/cure/internal/gui/ws"
@@ -175,6 +177,16 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 	// Set up notification dispatcher with OS local channel
 	dispatcher := notify.NewDispatcher(&localnotify.Channel{})
 
+	// Auto-detect tracker from project for backlog tools
+	var tracker backlog.Tracker
+	if c.projectStore != nil && projectName != "" {
+		if p, err := c.projectStore.Load(projectName); err == nil && p.Defaults.Tracker != nil {
+			if p.Defaults.Tracker.Type == "github" {
+				tracker = &ghbacklog.Tracker{Owner: p.Defaults.Tracker.Owner, Repo: p.Defaults.Tracker.Repo}
+			}
+		}
+	}
+
 	deps := api.Deps{
 		Config:       c.cfgData,
 		Checks:       c.checks,
@@ -185,6 +197,7 @@ func (c *GUICommand) Run(ctx context.Context, tc *terminal.Context) error {
 		ProjectName:  projectName,
 		ProjectRoots: projectRoots,
 		Notifier:     api.NewNotifier(dispatcher),
+		Tracker:      tracker,
 	}
 
 	apiRouter := api.NewAPIRouter(deps)

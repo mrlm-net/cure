@@ -13,17 +13,20 @@
 	let error = $state<string | null>(null);
 	let platformChecks = $state<CheckResult[]>([]);
 	let projectChecks = $state<CheckResult[]>([]);
+	let stackChecks = $state<CheckResult[]>([]);
 
 	async function runDoctor() {
 		loading = true;
 		error = null;
 		try {
-			const [platform, project] = await Promise.all([
+			const [platform, project, stacks] = await Promise.all([
 				apiFetch<CheckResult[]>('/api/doctor/platform').catch(() => []),
-				apiFetch<CheckResult[]>('/api/doctor')
+				apiFetch<CheckResult[]>('/api/doctor'),
+				apiFetch<CheckResult[]>('/api/doctor/project').catch(() => [])
 			]);
 			platformChecks = platform;
 			projectChecks = project;
+			stackChecks = stacks;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
@@ -72,6 +75,24 @@
 				<h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Platform</h2>
 				<div class="space-y-2">
 					{#each platformChecks as check (check.name)}
+						<div class="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3">
+							<div>
+								<p class="text-sm font-medium text-[var(--text-primary)]">{check.name}</p>
+								<p class="mt-0.5 text-xs text-[var(--text-secondary)]">{check.message}</p>
+							</div>
+							<span class="ml-3 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium {badgeClasses(check.status)}">{check.status}</span>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
+		<!-- Stack checks (project-scoped) -->
+		{#if stackChecks.length > 0}
+			<div>
+				<h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Stacks (project repos)</h2>
+				<div class="space-y-2">
+					{#each stackChecks as check (check.name)}
 						<div class="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3">
 							<div>
 								<p class="text-sm font-medium text-[var(--text-primary)]">{check.name}</p>

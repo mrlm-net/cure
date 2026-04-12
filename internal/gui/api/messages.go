@@ -41,7 +41,7 @@ type AgentResult struct {
 // streams the response as SSE events. When no real agent is configured
 // (runFn is nil), a built-in echo stub splits the user message into words
 // and streams them back as tokens.
-func messagesHandler(store agent.SessionStore, runFn AgentRunFunc) http.HandlerFunc {
+func messagesHandler(store agent.SessionStore, runFn AgentRunFunc, notifier ...Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -123,6 +123,20 @@ func messagesHandler(store agent.SessionStore, runFn AgentRunFunc) http.HandlerF
 						sess.AppendAssistantMessage(assistantText.String())
 					}
 					_ = store.Save(context.Background(), sess)
+
+					// Send OS/channel notification on completion
+					if len(notifier) > 0 && notifier[0] != nil {
+						summary := assistantText.String()
+						if len(summary) > 100 {
+							summary = summary[:100] + "..."
+						}
+						notifier[0].Notify(context.Background(), sess.ID, sess.Name, sess.ProjectName, summary)
+					}
+				}
+
+				// Notify on errors too
+				if ev.Kind == agent.EventKindError && len(notifier) > 0 && notifier[0] != nil {
+					notifier[0].Notify(context.Background(), sess.ID, sess.Name, sess.ProjectName, "Error: "+ev.Err)
 				}
 
 				writeSSE(w, flusher, SSEEvent{
